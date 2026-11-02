@@ -165,8 +165,8 @@ public class JiraServiceTest {
 
         assertEquals("Комментарий добавлен к задаче PROJ-1", output);
         String body = client.getLastRequest().body();
-        assertTrue(body.contains("\"type\":\"paragraph\""));
-        assertTrue(body.contains("\"text\":\"Hello\""));
+        assertTrue(body.contains("\"body\":\"Hello\""));
+        assertTrue(!body.contains("\"type\":\"paragraph\""));
     }
 
     @Test

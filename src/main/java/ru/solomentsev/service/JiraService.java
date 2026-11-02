@@ -237,11 +237,10 @@ public class JiraService {
     public String addComment(String issueKey, String comment) throws IOException {
         String url = baseUrl + REST_API + "/issue/" + issueKey + "/comment";
 
+        // Jira REST API v2 принимает комментарий обычной строкой.
+        // ADF-документ используется в API v3, но здесь endpoint остаётся v2.
         ObjectNode payload = mapper.createObjectNode();
-        ObjectNode body = payload.putObject("body");
-        body.put("type", "paragraph");
-        ArrayNode content = body.putArray("content");
-        content.add(mapper.createObjectNode().put("type", "text").put("text", comment));
+        payload.put("body", comment);
 
         client.post(url, mapper.writeValueAsString(payload));
         return "Комментарий добавлен к задаче " + issueKey;
