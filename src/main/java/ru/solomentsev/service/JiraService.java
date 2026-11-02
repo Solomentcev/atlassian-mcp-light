@@ -42,8 +42,11 @@ public class JiraService {
     private static final Pattern ACCOUNT_ID_UUID = Pattern.compile(
             "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
-    /** Максимальная длина текста, возвращаемого агентом. */
-    private static final int MAX_TEXT_LENGTH = 4000;
+    /** Максимальная длина текстового поля по умолчанию. */
+    private static final int DEFAULT_MAX_TEXT_LENGTH = 4000;
+
+    /** Максимальная длина текстового поля в ответах Jira. */
+    private final int maxTextLength;
 
     private final ObjectMapper mapper;
     private final HttpClient client;
@@ -56,9 +59,25 @@ public class JiraService {
      * @param baseUrl базовый URL Jira (например, https://company.atlassian.net)
      */
     public JiraService(HttpClient client, String baseUrl) {
+        this(client, baseUrl, DEFAULT_MAX_TEXT_LENGTH);
+    }
+
+    /**
+     * Создает сервис Jira с заданным ограничением длины возвращаемых текстовых полей.
+     *
+     * @param client HTTP-клиент Jira
+     * @param baseUrl базовый URL Jira
+     * @param maxTextLength максимальная длина текстового поля до добавления маркера сокращения
+     * @throws IllegalArgumentException если лимит не положительный
+     */
+    public JiraService(HttpClient client, String baseUrl, int maxTextLength) {
+        if (maxTextLength <= 0) {
+            throw new IllegalArgumentException("maxTextLength должен быть больше нуля");
+        }
         this.mapper = new ObjectMapper();
         this.client = client;
         this.baseUrl = normalizeUrl(baseUrl);
+        this.maxTextLength = maxTextLength;
     }
 
     /**
@@ -78,20 +97,17 @@ public class JiraService {
         if (json.has("fields")) {
             JsonNode fields = json.get("fields");
             if (fields.has("summary")) {
-                result.put("summary", fields.get("summary").asText());
+                result.put("summary", truncate(fields.get("summary").asText()));
             }
             if (fields.has("status") && fields.get("status").has("name")) {
-                result.put("status", fields.get("status").get("name").asText());
+                result.put("status", truncate(fields.get("status").get("name").asText()));
             }
             if (fields.has("issuetype") && fields.get("issuetype").has("name")) {
-                result.put("type", fields.get("issuetype").get("name").asText());
+                result.put("type", truncate(fields.get("issuetype").get("name").asText()));
             }
             if (fields.has("description") && !fields.get("description").isNull()) {
                 String description = fields.get("description").asText();
-                if (description.length() > MAX_TEXT_LENGTH) {
-                    description = description.substring(0, MAX_TEXT_LENGTH) + "...";
-                }
-                result.put("description_snippet", description);
+                result.put("description_snippet", truncate(description));
             }
         }
 
@@ -128,10 +144,10 @@ public class JiraService {
             if (issue.has("fields")) {
                 JsonNode f = issue.get("fields");
                 if (f.has("summary")) {
-                    item.put("summary", f.get("summary").asText());
+                    item.put("summary", truncate(f.get("summary").asText()));
                 }
                 if (f.has("status") && f.get("status").has("name")) {
-                    item.put("status", f.get("status").get("name").asText());
+                    item.put("status", truncate(f.get("status").get("name").asText()));
                 }
             }
             results.add(item);
@@ -152,8 +168,8 @@ public class JiraService {
      */
     public String createIssue(String projectKey, String summary, String description,
                              String issueType) throws IOException {
-        if (description != null && description.length() > MAX_TEXT_LENGTH) {
-            description = description.substring(0, MAX_TEXT_LENGTH);
+        if (description != null && description.length() > maxTextLength) {
+            description = description.substring(0, maxTextLength);
         }
 
         String url = baseUrl + REST_API + "/issue";
@@ -257,8 +273,8 @@ public class JiraService {
         String url = baseUrl + REST_API + "/project/" + projectKey;
         JsonNode json = parseResponse(client.get(url));
         String key = json.has("key") ? json.get("key").asText() : projectKey;
-        String name = json.has("name") ? json.get("name").asText() : "";
-        String typeKey = json.has("projectTypeKey") ? json.get("projectTypeKey").asText() : "";
+        String name = json.has("name") ? truncate(json.get("name").asText()) : "";
+        String typeKey = json.has("projectTypeKey") ? truncate(json.get("projectTypeKey").asText()) : "";
         return "Проект: " + key + " - " + name + " (" + typeKey + ")";
     }
 
@@ -289,12 +305,23 @@ public class JiraService {
             json = json.get(0);
         }
 
-        String displayName = json.has("displayName") ? json.get("displayName").asText() : "N/A";
-        String email = json.has("emailAddress") ? json.get("emailAddress").asText() : "N/A";
+        String displayName = json.has("displayName") ? truncate(json.get("displayName").asText()) : "N/A";
+        String email = json.has("emailAddress") ? truncate(json.get("emailAddress").asText()) : "N/A";
         return "Пользователь: " + userIdentifier + " - " + displayName + " (" + email + ")";
     }
 
     // ==================== Private helpers ====================
+
+    /**
+     * Сокращает длинное текстовое поле, не затрагивая структуру JSON-ответа.
+     *
+     * @param value исходный текст
+     * @return исходный или сокращённый текст
+     */
+    private String truncate(String value) {
+        return value != null && value.length() > maxTextLength
+                ? value.substring(0, maxTextLength) + "..." : value;
+    }
 
     private JsonNode parseResponse(String response) throws IOException {
         try {

@@ -26,8 +26,11 @@ public final class AppConfig {
     /** Имя переменной окружения URL Confluence. */
     private static final String CONFLUENCE_URL_ENV = "CONFLUENCE_URL";
 
-    /** Минимальный допустимый URL. */
-    private static final String MIN_URL = "";
+    /** Лимит текста одного поля в ответе инструмента по умолчанию. */
+    public static final int DEFAULT_MAX_TEXT_LENGTH = 4000;
+
+    /** Максимальный размер HTTP-ответа по умолчанию (2 МиБ). */
+    public static final int DEFAULT_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
     /** Назначение Jira REST API. */
     private static final String JIRA_API_PREFIX = "/rest/api";
@@ -53,6 +56,12 @@ public final class AppConfig {
     /** Предварительно вычисленный заголовок Authorization. */
     private final String authHeader;
 
+    /** Максимальная длина одного текстового поля в ответе инструмента. */
+    private final int maxTextLength;
+
+    /** Максимальный размер тела HTTP-ответа в байтах. */
+    private final int maxResponseBytes;
+
     /**
      * Защищенный конструктор. Создает конфигурацию с заданными значениями.
      *
@@ -61,12 +70,21 @@ public final class AppConfig {
      * @param jiraEmail    email для аутентификации (не null, не пустой)
      * @param jiraToken    токен для аутентификации (не null, не пустой)
      */
-    private AppConfig(String jiraUrl, String confluenceUrl, String jiraEmail, String jiraToken) {
+    private AppConfig(String jiraUrl, String confluenceUrl, String jiraEmail, String jiraToken,
+                      int maxTextLength, int maxResponseBytes) {
         this.jiraUrl = normalizeUrl(jiraUrl);
         this.confluenceUrl = confluenceUrl != null ? normalizeUrl(confluenceUrl) : null;
         this.jiraEmail = jiraEmail;
         this.jiraToken = jiraToken;
         this.authHeader = buildAuthHeader(jiraEmail, jiraToken);
+        if (maxTextLength <= 0) {
+            throw new IllegalArgumentException("maxTextLength должен быть больше нуля");
+        }
+        if (maxResponseBytes <= 0) {
+            throw new IllegalArgumentException("maxResponseBytes должен быть больше нуля");
+        }
+        this.maxTextLength = maxTextLength;
+        this.maxResponseBytes = maxResponseBytes;
     }
 
     /**
@@ -90,7 +108,8 @@ public final class AppConfig {
         validateRequired(jiraEmail, JIRA_EMAIL_ENV);
         validateRequired(jiraToken, JIRA_TOKEN_ENV);
 
-        return new AppConfig(jiraUrl, confluenceUrl, jiraEmail, jiraToken);
+        return new AppConfig(jiraUrl, confluenceUrl, jiraEmail, jiraToken,
+                DEFAULT_MAX_TEXT_LENGTH, DEFAULT_MAX_RESPONSE_BYTES);
     }
 
     /**
@@ -105,10 +124,30 @@ public final class AppConfig {
      */
     public static AppConfig of(String jiraUrl, String confluenceUrl,
                                String jiraEmail, String jiraToken) {
+        return of(jiraUrl, confluenceUrl, jiraEmail, jiraToken,
+                DEFAULT_MAX_TEXT_LENGTH, DEFAULT_MAX_RESPONSE_BYTES);
+    }
+
+    /**
+     * Создает конфигурацию с явно заданными ограничениями размера данных.
+     *
+     * @param jiraUrl базовый URL Jira
+     * @param confluenceUrl базовый URL Confluence или null
+     * @param jiraEmail email для аутентификации
+     * @param jiraToken API-токен
+     * @param maxTextLength максимальное количество сохраняемых символов текста до маркера сокращения
+     * @param maxResponseBytes максимальный размер HTTP-ответа в байтах
+     * @return новая конфигурация
+     * @throws IllegalStateException если обязательные параметры пустые
+     * @throws IllegalArgumentException если один из лимитов не положительный
+     */
+    public static AppConfig of(String jiraUrl, String confluenceUrl, String jiraEmail, String jiraToken,
+                               int maxTextLength, int maxResponseBytes) {
         validateRequired(jiraUrl, "jiraUrl");
         validateRequired(jiraEmail, "jiraEmail");
         validateRequired(jiraToken, "jiraToken");
-        return new AppConfig(jiraUrl, confluenceUrl, jiraEmail, jiraToken);
+        return new AppConfig(jiraUrl, confluenceUrl, jiraEmail, jiraToken,
+                maxTextLength, maxResponseBytes);
     }
 
     /**
@@ -205,6 +244,24 @@ public final class AppConfig {
     }
 
     /**
+     * Возвращает максимальное количество сохраняемых символов до маркера сокращения в ответе MCP-инструмента.
+     *
+     * @return количество сохраняемых символов до маркера сокращения
+     */
+    public int getMaxTextLength() {
+        return maxTextLength;
+    }
+
+    /**
+     * Возвращает максимальный размер тела HTTP-ответа.
+     *
+     * @return лимит в байтах
+     */
+    public int getMaxResponseBytes() {
+        return maxResponseBytes;
+    }
+
+    /**
      * Возвращает URL Confluence с fallback-логикой.
      *
      * <p>Если Confluence URL задан явно — возвращает его.
@@ -227,12 +284,15 @@ public final class AppConfig {
         return jiraUrl.equals(that.jiraUrl) &&
                 java.util.Objects.equals(confluenceUrl, that.confluenceUrl) &&
                 jiraEmail.equals(that.jiraEmail) &&
-                jiraToken.equals(that.jiraToken);
+                jiraToken.equals(that.jiraToken) &&
+                maxTextLength == that.maxTextLength &&
+                maxResponseBytes == that.maxResponseBytes;
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(jiraUrl, confluenceUrl, jiraEmail, jiraToken);
+        return java.util.Objects.hash(jiraUrl, confluenceUrl, jiraEmail, jiraToken,
+                maxTextLength, maxResponseBytes);
     }
 
     @Override
@@ -240,6 +300,8 @@ public final class AppConfig {
         return "AppConfig{" +
                 "jiraUrl='" + jiraUrl + '\'' +
                 ", confluenceUrl=" + (confluenceUrl != null ? confluenceUrl : "<null>") +
+                ", maxTextLength=" + maxTextLength +
+                ", maxResponseBytes=" + maxResponseBytes +
                 '}';
     }
 }

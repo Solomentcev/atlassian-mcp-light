@@ -141,6 +141,39 @@ public class ConfigLoaderTest {
     }
 
     @Test
+    public void responseLimitsAreLoadedFromEnvironment() {
+        AppConfig config = ConfigLoader.of(
+                env("JIRA_URL", JIRA_URL, "JIRA_EMAIL", EMAIL, "JIRA_TOKEN", TOKEN,
+                        "MCP_MAX_TEXT_LENGTH", "2500", "MCP_MAX_RESPONSE_BYTES", "4096"),
+                null, null, null).load();
+
+        assertEquals(2500, config.getMaxTextLength());
+        assertEquals(4096, config.getMaxResponseBytes());
+    }
+
+    @Test
+    public void responseLimitsAreLoadedFromJvmProperties() {
+        Properties properties = new Properties();
+        properties.setProperty("mcp.max-text-length", "1800");
+        properties.setProperty("mcp.max-response-bytes", "8192");
+
+        AppConfig config = ConfigLoader.of(
+                env("JIRA_URL", JIRA_URL, "JIRA_EMAIL", EMAIL, "JIRA_TOKEN", TOKEN),
+                properties, null, null).load();
+
+        assertEquals(1800, config.getMaxTextLength());
+        assertEquals(8192, config.getMaxResponseBytes());
+    }
+
+    @Test
+    public void invalidResponseLimitIsRejected() {
+        assertThrows(IllegalStateException.class, () -> ConfigLoader.of(
+                env("JIRA_URL", JIRA_URL, "JIRA_EMAIL", EMAIL, "JIRA_TOKEN", TOKEN,
+                        "MCP_MAX_TEXT_LENGTH", "not-a-number"),
+                null, null, null).load());
+    }
+
+    @Test
     public void missingTokenIsRejectedWithVariableName() {
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 () -> ConfigLoader.of(env("JIRA_URL", JIRA_URL, "JIRA_EMAIL", EMAIL), null, null, null).load());

@@ -54,12 +54,14 @@ public class AtlassianMcpServer {
         }
 
         // 2. HTTP-клиент (DIP: зависимость от интерфейса)
-        HttpClient httpClient = HttpClientFactory.create(config.getAuthHeader());
+        HttpClient httpClient = HttpClientFactory.create(
+                config.getAuthHeader(), config.getMaxResponseBytes());
 
         // 3. Доменные сервисы (SRP: бизнес-логика в отдельных классах)
-        JiraService jiraService = new JiraService(httpClient, config.getJiraUrl());
+        JiraService jiraService = new JiraService(
+                httpClient, config.getJiraUrl(), config.getMaxTextLength());
         ConfluenceService confluenceService = new ConfluenceService(
-                httpClient, config.resolveConfluenceUrl());
+                httpClient, config.resolveConfluenceUrl(), config.getMaxTextLength());
 
         // 4. Протокол MCP (SRP: только JSON-RPC роутинг)
         McpProtocol protocol = new McpProtocol();

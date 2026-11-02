@@ -18,8 +18,11 @@ import java.nio.charset.StandardCharsets;
  */
 public class ConfluenceService {
 
-    /** Максимальная длина текста, возвращаемого агентом. */
-    private static final int MAX_TEXT_LENGTH = 4000;
+    /** Максимальная длина текстового поля по умолчанию. */
+    private static final int DEFAULT_MAX_TEXT_LENGTH = 4000;
+
+    /** Максимальная длина текстового поля в ответах Confluence. */
+    private final int maxTextLength;
 
     private final ObjectMapper mapper;
     private final HttpClient client;
@@ -32,9 +35,25 @@ public class ConfluenceService {
      * @param baseUrl базовый URL Confluence (например, https://company.atlassian.net/wiki)
      */
     public ConfluenceService(HttpClient client, String baseUrl) {
+        this(client, baseUrl, DEFAULT_MAX_TEXT_LENGTH);
+    }
+
+    /**
+     * Создает сервис Confluence с заданным ограничением длины возвращаемых текстовых полей.
+     *
+     * @param client HTTP-клиент Confluence
+     * @param baseUrl базовый URL Confluence
+     * @param maxTextLength максимальная длина текстового поля до добавления маркера сокращения
+     * @throws IllegalArgumentException если лимит не положительный
+     */
+    public ConfluenceService(HttpClient client, String baseUrl, int maxTextLength) {
+        if (maxTextLength <= 0) {
+            throw new IllegalArgumentException("maxTextLength должен быть больше нуля");
+        }
         this.mapper = new ObjectMapper();
         this.client = client;
         this.baseUrl = normalizeUrl(baseUrl);
+        this.maxTextLength = maxTextLength;
     }
 
     /**
@@ -48,7 +67,7 @@ public class ConfluenceService {
         String url = baseUrl + "/rest/api/content/" + pageId + "?expand=body.storage,version";
         JsonNode json = parseResponse(client.get(url));
 
-        String title = json.has("title") ? json.get("title").asText() : "";
+        String title = json.has("title") ? truncate(json.get("title").asText()) : "";
         String content = "";
         if (json.has("body") && json.get("body").has("storage")) {
             JsonNode storage = json.get("body").get("storage");
@@ -56,9 +75,7 @@ public class ConfluenceService {
                 content = storage.get("value").asText();
             }
         }
-        if (content.length() > MAX_TEXT_LENGTH) {
-            content = content.substring(0, MAX_TEXT_LENGTH) + "...";
-        }
+        content = truncate(content);
 
         return "Title: " + title + "\nContent: " + content;
     }
@@ -150,11 +167,11 @@ public class ConfluenceService {
         String url = baseUrl + "/rest/api/space/" + spaceKey;
         JsonNode json = parseResponse(client.get(url));
 
-        String key = json.has("key") ? json.get("key").asText() : spaceKey;
-        String name = json.has("name") ? json.get("name").asText() : "";
-        String type = json.has("type") ? json.get("type").asText() : "N/A";
+        String key = json.has("key") ? truncate(json.get("key").asText()) : truncate(spaceKey);
+        String name = json.has("name") ? truncate(json.get("name").asText()) : "";
+        String type = json.has("type") ? truncate(json.get("type").asText()) : "N/A";
         String description = json.has("description") && json.get("description").has("value")
-                ? json.get("description").get("value").asText() : "N/A";
+                ? truncate(json.get("description").get("value").asText()) : "N/A";
 
         return "Пространство: " + key + " - " + name
                 + "\nТип: " + type
@@ -177,8 +194,8 @@ public class ConfluenceService {
 
         StringBuilder result = new StringBuilder("Пространства Confluence (лимит: " + limit + "):\n");
         for (JsonNode space : spaces) {
-            result.append("- ").append(space.get("key").asText())
-                    .append(": ").append(space.get("name").asText())
+            result.append("- ").append(truncate(space.get("key").asText()))
+                    .append(": ").append(truncate(space.get("name").asText()))
                     .append("\n");
         }
         return result.toString();
@@ -202,11 +219,11 @@ public class ConfluenceService {
                 : mapper.createArrayNode();
 
         StringBuilder output = new StringBuilder(
-                "Результаты поиска CQL: " + cql + " (лимит: " + limit + "):\n");
+                "Результаты поиска CQL: " + truncate(cql) + " (лимит: " + limit + "):\n");
         for (JsonNode result : results) {
-            String title = result.has("title") ? result.get("title").asText() : "";
+            String title = result.has("title") ? truncate(result.get("title").asText()) : "";
             String spaceKey = result.has("space") && result.get("space").has("key")
-                    ? result.get("space").get("key").asText() : "N/A";
+                    ? truncate(result.get("space").get("key").asText()) : "N/A";
             String contentId = result.has("id") ? result.get("id").asText() : "";
             output.append("- ").append(spaceKey).append(":").append(contentId)
                     .append(" - ").append(title).append("\n");
@@ -215,6 +232,17 @@ public class ConfluenceService {
     }
 
     // ==================== Private helpers ====================
+
+    /**
+     * Сокращает длинное текстовое поле, не затрагивая структуру JSON-ответа.
+     *
+     * @param value исходный текст
+     * @return исходный или сокращённый текст
+     */
+    private String truncate(String value) {
+        return value != null && value.length() > maxTextLength
+                ? value.substring(0, maxTextLength) + "..." : value;
+    }
 
     private JsonNode parseResponse(String response) throws IOException {
         try {

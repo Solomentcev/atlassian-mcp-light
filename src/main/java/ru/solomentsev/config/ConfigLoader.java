@@ -54,6 +54,12 @@ public final class ConfigLoader {
     /** Ключ свойства JVM с базовым URL Confluence. */
     private static final String SYS_CONFLUENCE_URL = "confluence.url";
 
+    /** Ключ свойства JVM с лимитом длины текста MCP. */
+    private static final String SYS_MAX_TEXT_LENGTH = "mcp.max-text-length";
+
+    /** Ключ свойства JVM с лимитом HTTP-ответа. */
+    private static final String SYS_MAX_RESPONSE_BYTES = "mcp.max-response-bytes";
+
     /** Имя переменной окружения с базовым URL Jira. */
     private static final String ENV_JIRA_URL = "JIRA_URL";
 
@@ -65,6 +71,12 @@ public final class ConfigLoader {
 
     /** Имя переменной окружения с базовым URL Confluence. */
     private static final String ENV_CONFLUENCE_URL = "CONFLUENCE_URL";
+
+    /** Переменная окружения с лимитом длины текста MCP. */
+    private static final String ENV_MAX_TEXT_LENGTH = "MCP_MAX_TEXT_LENGTH";
+
+    /** Переменная окружения с лимитом HTTP-ответа. */
+    private static final String ENV_MAX_RESPONSE_BYTES = "MCP_MAX_RESPONSE_BYTES";
 
     /** Переменная окружения с путём к dotenv-файлу. */
     private static final String ENV_FILE_PATH = "ATLASSIAN_ENV_FILE";
@@ -169,8 +181,13 @@ public final class ConfigLoader {
         String jiraToken = require(resolve(SYS_JIRA_TOKEN, ENV_JIRA_TOKEN),
                 ENV_JIRA_TOKEN, SYS_JIRA_TOKEN);
         String confluenceUrl = resolve(SYS_CONFLUENCE_URL, ENV_CONFLUENCE_URL);
+        int maxTextLength = resolvePositiveInt(SYS_MAX_TEXT_LENGTH, ENV_MAX_TEXT_LENGTH,
+                AppConfig.DEFAULT_MAX_TEXT_LENGTH, 1_000_000);
+        int maxResponseBytes = resolvePositiveInt(SYS_MAX_RESPONSE_BYTES, ENV_MAX_RESPONSE_BYTES,
+                AppConfig.DEFAULT_MAX_RESPONSE_BYTES, 100 * 1024 * 1024);
 
-        return AppConfig.of(jiraUrl, confluenceUrl, jiraEmail, jiraToken);
+        return AppConfig.of(jiraUrl, confluenceUrl, jiraEmail, jiraToken,
+                maxTextLength, maxResponseBytes);
     }
 
     /**
@@ -208,6 +225,33 @@ public final class ConfigLoader {
         }
         log.debug("Параметр {} не задан ни в одном источнике", systemKey);
         return null;
+    }
+
+    /**
+     * Читает положительное целое значение настройки с верхней границей.
+     *
+     * @param systemKey ключ свойства JVM
+     * @param envKey имя переменной окружения
+     * @param defaultValue значение по умолчанию
+     * @param maximum максимальное допустимое значение
+     * @return настроенное значение или значение по умолчанию
+     * @throws IllegalStateException если значение не является допустимым целым числом
+     */
+    private int resolvePositiveInt(String systemKey, String envKey, int defaultValue, int maximum) {
+        String configured = resolve(systemKey, envKey);
+        if (configured == null) {
+            return defaultValue;
+        }
+        try {
+            int value = Integer.parseInt(configured);
+            if (value <= 0 || value > maximum) {
+                throw new NumberFormatException("значение вне допустимого диапазона");
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("Недопустимое значение конфигурации " + envKey
+                    + ": ожидается целое число от 1 до " + maximum, e);
+        }
     }
 
     private static String require(String value, String envKey, String propertiesKey) {

@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -14,21 +16,31 @@ final class JdkHttpClient implements HttpClient {
 
     private static final Logger log = LoggerFactory.getLogger(JdkHttpClient.class);
     private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(60);
+    private static final int DEFAULT_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
     private final java.net.http.HttpClient client;
     private final String authHeader;
     private final Duration requestTimeout;
+    private final int maxResponseBytes;
 
     JdkHttpClient(String authHeader) {
-        this(authHeader, DEFAULT_REQUEST_TIMEOUT);
+        this(authHeader, DEFAULT_REQUEST_TIMEOUT, DEFAULT_MAX_RESPONSE_BYTES);
     }
 
     JdkHttpClient(String authHeader, Duration requestTimeout) {
+        this(authHeader, requestTimeout, DEFAULT_MAX_RESPONSE_BYTES);
+    }
+
+    JdkHttpClient(String authHeader, Duration requestTimeout, int maxResponseBytes) {
         this.authHeader = Objects.requireNonNull(authHeader, "authHeader");
         this.requestTimeout = Objects.requireNonNull(requestTimeout, "requestTimeout");
         if (requestTimeout.isZero() || requestTimeout.isNegative()) {
             throw new IllegalArgumentException("requestTimeout должен быть положительным");
         }
+        if (maxResponseBytes <= 0) {
+            throw new IllegalArgumentException("maxResponseBytes должен быть больше нуля");
+        }
+        this.maxResponseBytes = maxResponseBytes;
         this.client = java.net.http.HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))
                 // Не пересылаем Basic Auth автоматически на адрес из redirect.
@@ -78,9 +90,9 @@ final class JdkHttpClient implements HttpClient {
         log.debug("HTTP-запрос: {} {}", method, path);
 
         long startedAt = System.nanoTime();
-        HttpResponse<String> response;
+        HttpResponse<InputStream> response;
         try {
-            response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            response = client.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Запрос " + method + " " + path + " прерван", e);
@@ -93,10 +105,21 @@ final class JdkHttpClient implements HttpClient {
         if (status < 200 || status >= 300) {
             // Тело ответа Atlassian может содержать персональные данные или фрагменты
             // пользовательского контента. Не включаем его ни в логи, ни в MCP-ошибку.
-            log.error("HTTP-ошибка: {} {} -> {}", method, path, status);
+            try (InputStream ignored = response.body()) {
+                log.error("HTTP-ошибка: {} {} -> {}", method, path, status);
+            }
             throw new IOException("HTTP " + status + " (" + method + " " + path + ")");
         }
-        return response.body();
+
+        // Читаем не более лимита + 1 байта: oversized body отклоняется до полной загрузки.
+        try (InputStream bodyStream = response.body()) {
+            byte[] body = bodyStream.readNBytes(maxResponseBytes + 1);
+            if (body.length > maxResponseBytes) {
+                throw new IOException("HTTP response body exceeds configured limit of "
+                        + maxResponseBytes + " bytes (" + method + " " + path + ")");
+            }
+            return new String(body, StandardCharsets.UTF_8);
+        }
     }
 
     /**

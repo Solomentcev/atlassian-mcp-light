@@ -81,6 +81,30 @@ public class AppConfigTest {
     }
 
     @Test
+    public void responseSizeLimitsUseDefaultsWhenNotConfigured() {
+        AppConfig config = AppConfig.of(JIRA_URL, null, EMAIL, TOKEN);
+
+        assertEquals(AppConfig.DEFAULT_MAX_TEXT_LENGTH, config.getMaxTextLength());
+        assertEquals(AppConfig.DEFAULT_MAX_RESPONSE_BYTES, config.getMaxResponseBytes());
+    }
+
+    @Test
+    public void customResponseSizeLimitsAreStored() {
+        AppConfig config = AppConfig.of(JIRA_URL, null, EMAIL, TOKEN, 2500, 1024);
+
+        assertEquals(2500, config.getMaxTextLength());
+        assertEquals(1024, config.getMaxResponseBytes());
+    }
+
+    @Test
+    public void nonPositiveResponseSizeLimitsAreRejected() {
+        assertThrows(IllegalArgumentException.class,
+                () -> AppConfig.of(JIRA_URL, null, EMAIL, TOKEN, 0, 1024));
+        assertThrows(IllegalArgumentException.class,
+                () -> AppConfig.of(JIRA_URL, null, EMAIL, TOKEN, 1000, 0));
+    }
+
+    @Test
     public void toStringDoesNotLeakCredentials() {
         AppConfig config = AppConfig.of(JIRA_URL, null, EMAIL, TOKEN);
 

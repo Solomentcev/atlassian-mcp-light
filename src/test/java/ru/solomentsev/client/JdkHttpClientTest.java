@@ -46,6 +46,10 @@ public class JdkHttpClientTest {
             capture(exchange);
             respond(exchange, 500, "{\"error\":\"boom\"}");
         });
+        server.createContext("/large", exchange -> {
+            capture(exchange);
+            respond(exchange, 200, "0123456789");
+        });
         server.createContext("/rest/", exchange -> {
             capture(exchange);
             respond(exchange, 500, "{\"errorMessages\":[\"JQL is invalid\"]}");
@@ -114,6 +118,18 @@ public class JdkHttpClientTest {
         assertEquals("{\"version\":{\"number\":2}}", lastBody.get());
         assertEquals("application/json", lastContentType.get());
         assertEquals("Basic dXNlcjp0b2tlbg==", lastAuthorization.get());
+    }
+
+    @Test
+    public void oversizedResponseIsRejectedBeforeFullBodyIsRead() {
+        HttpClient limitedClient = HttpClientFactory.create("Basic dXNlcjp0b2tlbg==", 5);
+
+        try {
+            limitedClient.get(url("/large"));
+            fail("Ожидалось IOException для слишком большого HTTP-ответа");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("exceeds configured limit of 5 bytes"));
+        }
     }
 
     @Test

@@ -49,6 +49,18 @@ public class ConfluenceServiceTest {
     }
 
     @Test
+    public void configuredTextLimitTruncatesPageFields() throws IOException {
+        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version",
+                "{\"id\":\"123\",\"title\":\"Long title\","
+                        + "\"body\":{\"storage\":{\"value\":\"Long content\"}}}");
+        ConfluenceService limited = new ConfluenceService(client, BASE_URL, 4);
+
+        String output = limited.getPage("123");
+
+        assertEquals("Title: Long...\nContent: Long...", output);
+    }
+
+    @Test
     public void createPageSendsTitleAsStringAndReturnsPageId() throws IOException {
         client.onPost(BASE_URL + "/rest/api/content", "{\"id\":\"999\",\"title\":\"New page\"}");
 

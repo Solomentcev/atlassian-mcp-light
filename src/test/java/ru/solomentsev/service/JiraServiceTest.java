@@ -60,6 +60,19 @@ public class JiraServiceTest {
     }
 
     @Test
+    public void configuredTextLimitTruncatesJiraFieldsWithoutBreakingJson() throws IOException {
+        client.onGet(BASE_URL + "/rest/api/2/issue/PROJ-1?fields=summary,description,status,issuetype",
+                issueResponse());
+        JiraService limited = new JiraService(client, BASE_URL, 4);
+
+        JsonNode root = MAPPER.readTree(limited.getIssue("PROJ-1"));
+
+        assertEquals("Task...", root.get("summary").asText());
+        assertEquals("Desc...", root.get("description_snippet").asText());
+        assertEquals("In P...", root.get("status").asText());
+    }
+
+    @Test
     public void searchSendsJqlAndMaxResults() throws IOException {
         client.onPost(BASE_URL + "/rest/api/3/search/jql",
                 "{\"issues\":[{\"key\":\"PROJ-1\",\"fields\":{\"summary\":\"Found\","

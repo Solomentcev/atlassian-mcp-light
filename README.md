@@ -46,6 +46,8 @@
 | `JIRA_EMAIL`     | да          | E-mail пользователя (только для Basic-аутентификации)                   |
 | `JIRA_TOKEN`     | да          | API-токен Atlassian (Cloud) или Personal Access Token (Server/DC)       |
 | `CONFLUENCE_URL` | нет         | Базовый URL Confluence. Если не задан — используется `JIRA_URL + /wiki` |
+| `MCP_MAX_TEXT_LENGTH` | нет | Количество сохраняемых символов в одном текстовом поле до маркера `...` (по умолчанию 4000; диапазон 1–1000000) |
+| `MCP_MAX_RESPONSE_BYTES` | нет | Максимальный размер тела одного HTTP-ответа (по умолчанию 2097152 байта; диапазон 1–104857600) |
 
 > **Важно:** секреты не должны попадать в репозиторий. Используйте переменные окружения, файл `.env` или `application.properties` (оба в `.gitignore`).
 
@@ -57,8 +59,8 @@
 
 | Приоритет | Источник                        | Ключи                                                    |
 |-----------|---------------------------------|----------------------------------------------------------|
-| 1         | Свойства JVM (`-Djira.url=...`) | `jira.url`, `jira.email`, `jira.token`, `confluence.url` |
-| 2         | Переменные окружения            | `JIRA_URL`, `JIRA_EMAIL`, `JIRA_TOKEN`, `CONFLUENCE_URL` |
+| 1         | Свойства JVM (`-Djira.url=...`) | `jira.url`, `jira.email`, `jira.token`, `confluence.url`, `mcp.max-text-length`, `mcp.max-response-bytes` |
+| 2         | Переменные окружения            | `JIRA_URL`, `JIRA_EMAIL`, `JIRA_TOKEN`, `CONFLUENCE_URL`, `MCP_MAX_TEXT_LENGTH`, `MCP_MAX_RESPONSE_BYTES` |
 | 3         | Файл `.env`                     | `JIRA_URL=...` (формат dotenv)                           |
 | 4         | Файл `application.properties`   | `jira.url=...` (допустимы и `JIRA_URL=...`)              |
 
@@ -79,6 +81,8 @@ jira.url=https://your-company.atlassian.net
 jira.email=user@company.com
 jira.token=your-api-token
 # confluence.url=https://your-company.atlassian.net/wiki
+# mcp.max-text-length=4000
+# mcp.max-response-bytes=2097152
 ```
 
 #### Где ищутся файлы
@@ -409,7 +413,8 @@ atlassian-mcp-server/
 - **Jira Cloud — пользователи:** параметр `username` у `/rest/api/2/user` удалён (требуется `accountId`). Поиск пользователя выполняется через `/rest/api/2/user/search?query=...` (совпадение по e-mail, имени или username), а если передан `accountId` — прямой запрос `/rest/api/2/user?accountId=...`.
 - **Структура payload Confluence** (по OpenAPI-спецификации Atlassian v1): `title` — обычная строка, `space` передаётся как `{"key": "..."}` и обязателен при создании, `body.storage.representation` — всегда `"storage"` (допустимые значения: `storage`, `atlas_doc_format`, `view`, `wiki`, `raw` и др.; `"html"` в enum отсутствует и приводит к `400 Bad Request`).
 - **Идентификатор Confluence:** используется числовой `id` страницы (не `pageId` в формате «pageId/12345»).
-- **Обрезка данных:** описание задачи и содержимое страницы ограничиваются 4000 символами, чтобы не переполнять контекст агента.
+- **Ограничение контекста:** длинные текстовые поля Jira и Confluence сохраняют не более `MCP_MAX_TEXT_LENGTH` символов (по умолчанию 4000), после чего добавляется маркер `...`; JSON формируется после сокращения полей и остаётся валидным.
+- **Ограничение HTTP-ответов:** тело каждого ответа Atlassian читается потоково и ограничивается `MCP_MAX_RESPONSE_BYTES` (по умолчанию 2 МиБ). Превышение лимита приводит к ошибке инструмента без загрузки всего тела в память.
 - **Потокобезопасность:** сервер обрабатывает запросы последовательно, по одному JSON-объекту на строку.
 - **Логирование:** SLF4J + Logback, вывод только в `stderr`, уровень — `ATLASSIAN_LOG_LEVEL` (по умолчанию `INFO`); см. раздел «Логирование».
 - **Сборка:** `maven-shade-plugin` собирает uber-jar; `dependency-reduced-pom.xml` не создаётся (`createDependencyReducedPom=false`).

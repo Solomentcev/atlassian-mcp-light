@@ -21,4 +21,16 @@ public final class HttpClientFactory {
     public static HttpClient create(String authHeader) {
         return new JdkHttpClient(authHeader);
     }
+
+    /**
+     * Создает HTTP-клиент с ограничением размера тела ответа.
+     *
+     * @param authHeader заголовок Authorization
+     * @param maxResponseBytes максимальный размер тела ответа в байтах
+     * @return HTTP-клиент с заданным ограничением
+     * @throws IllegalArgumentException если лимит не положительный
+     */
+    public static HttpClient create(String authHeader, int maxResponseBytes) {
+        return new JdkHttpClient(authHeader, java.time.Duration.ofSeconds(60), maxResponseBytes);
+    }
 }
