@@ -102,10 +102,10 @@ jira.token=your-api-token
 mvn clean package
 ```
 
-В `target/` появится самодостаточный uber-jar со всеми зависимостями:
+В `atlassian-mcp-app/target/` появится самодостаточный uber-jar со всеми зависимостями:
 
 ```
-target/atlassian-mcp-server-1.0-SNAPSHOT.jar
+atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 ```
 
 Полезные цели:
@@ -124,14 +124,14 @@ export JIRA_URL="https://your-company.atlassian.net"
 export JIRA_EMAIL="user@company.com"
 export JIRA_TOKEN="your-api-token"
 
-java -jar target/atlassian-mcp-server-1.0-SNAPSHOT.jar
+java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 ```
 
 Сервер ожидает JSON-RPC сообщения в `stdin` и отвечает в `stdout` (по одному JSON-объекту на строку). Проверить вручную:
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
-  | java -jar target/atlassian-mcp-server-1.0-SNAPSHOT.jar
+  | java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 ```
 
 ```json
@@ -149,7 +149,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
   "mcpServers": {
     "atlassian": {
       "command": "java",
-      "args": ["-jar", "/полный/путь/atlassian-mcp-server/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"],
+      "args": ["-jar", "/полный/путь/atlassian-mcp-server/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"],
       "env": {
         "JIRA_URL": "https://your-company.atlassian.net",
         "JIRA_EMAIL": "user@company.com",
@@ -170,7 +170,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
     "atlassian": {
       "type": "stdio",
       "command": "java",
-      "args": ["-jar", "/полный/путь/atlassian-mcp-server/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"],
+      "args": ["-jar", "/полный/путь/atlassian-mcp-server/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"],
       "env": {
         "JIRA_URL": "https://your-company.atlassian.net",
         "JIRA_EMAIL": "user@company.com",
@@ -194,7 +194,7 @@ Cline CLI и плагин Cline для IntelliJ IDEA читают MCP-конфи
       "command": "/usr/bin/java",
       "args": [
         "-jar",
-        "/полный/путь/atlassian-mcp-server/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"
+        "/полный/путь/atlassian-mcp-server/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"
       ],
       "env": {
         "ATLASSIAN_ENV_FILE": "/полный/путь/atlassian-mcp-server/.env",
@@ -227,7 +227,7 @@ target/
 
 ## Логирование
 
-Логи пишутся через SLF4J + Logback **только в `stderr`**. Поток `stdout` полностью занят протоколом JSON-RPC: любой посторонний вывод в него ломает разбор ответов MCP-клиентом. Это обеспечивается конфигурацией `src/main/resources/logback.xml` (`<target>System.err</target>`).
+Логи пишутся через SLF4J + Logback **только в `stderr`**. Поток `stdout` полностью занят протоколом JSON-RPC: любой посторонний вывод в него ломает разбор ответов MCP-клиентом. Это обеспечивается конфигурацией `atlassian-core/src/main/resources/logback.xml` (`<target>System.err</target>`).
 
 Уровень логирования задаётся переменной окружения `ATLASSIAN_LOG_LEVEL`:
 
@@ -241,7 +241,7 @@ target/
 Значение по умолчанию — `INFO`. Пример запуска с подробным логом:
 
 ```bash
-ATLASSIAN_LOG_LEVEL=DEBUG java -jar target/atlassian-mcp-server-1.0-SNAPSHOT.jar
+ATLASSIAN_LOG_LEVEL=DEBUG java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 ```
 
 Пример вывода в `stderr`:
@@ -387,20 +387,40 @@ docker run --rm atlassian-mcp-server ./mvnw test
 
 ## Структура проекта
 
+Проект разделён на четыре Maven-модуля:
+
 ```
 atlassian-mcp-server/
-├── pom.xml                                  # сборка, зависимости, shade-плагин
-└── src
-    ├── main/java/ru/solomentsev/
-    │   ├── AtlassianMcpServer.java          # точка входа: сборка компонентов и STDIO-транспорт
-    │   ├── client/                          # HTTP-клиент (java.net.http) за интерфейсом HttpClient
-    │   ├── config/                          # AppConfig, ConfigLoader, DotEnvParser — конфигурация
-    │   ├── protocol/                        # MCP-протокол, ToolRegistrar, ToolSchema
-    │   └── service/                         # JiraService, ConfluenceService — бизнес-логика
-    ├── main/resources/
-    │   └── logback.xml                      # вывод логов в stderr, уровень ATLASSIAN_LOG_LEVEL
-    └── test/java/ru/solomentsev/            # юнит-тесты (JUnit 4)
+├── pom.xml                         # родительский POM и агрегатор модулей
+├── atlassian-core/                 # общая инфраструктура
+│   └── src/
+│       ├── main/java/              # HTTP-клиент, конфигурация, MCP-протокол
+│       ├── main/resources/         # logback.xml
+│       └── test/java/              # тесты общей инфраструктуры
+├── atlassian-jira/                 # интеграция с Jira
+│   └── src/
+│       ├── main/java/              # JiraService и JiraToolProvider
+│       └── test/java/              # тесты Jira
+├── atlassian-confluence/           # интеграция с Confluence
+│   └── src/
+│       ├── main/java/              # ConfluenceService и ConfluenceToolProvider
+│       └── test/java/              # тесты Confluence
+└── atlassian-mcp-app/              # приложение и точка сборки
+    └── src/
+        ├── main/java/              # AtlassianMcpServer и ToolRegistrar
+        └── test/java/              # интеграционные тесты MCP-регистрации
 ```
+
+Зависимости направлены от продуктовых модулей к общему ядру:
+
+- `atlassian-jira` → `atlassian-core`;
+- `atlassian-confluence` → `atlassian-core`;
+- `atlassian-mcp-app` → `atlassian-core`, `atlassian-jira`, `atlassian-confluence`.
+
+Модули Jira и Confluence не зависят друг от друга. Общий интерфейс `ToolProvider`
+позволяет подключать новые продуктовые интеграции без изменений MCP-протокола.
+
+Юнит-тесты расположены в `src/test` соответствующих модулей. Отдельный тестовый Maven-модуль не используется.
 
 ---
 
