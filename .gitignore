@@ -1,0 +1,62 @@
+# Maven
+target/
+build/
+!**/src/main/**/target/
+!**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
+dependency-reduced-pom.xml
+
+# Compiled artifacts
+*.class
+*.jar
+*.war
+*.ear
+out/
+
+# IntelliJ IDEA
+.idea/
+.idea/modules.xml
+.idea/jarRepositories.xml
+.idea/compiler.xml
+.idea/libraries/
+.idea/workspace.xml
+.idea/usage.statistics.xml
+.idea/dictionaries
+*.iml
+*.iws
+*.ipr
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+
+### Logs / caches ###
+logs/
+*.log
+.cache/
+
+### Secrets ###
+.env
+.env.local
+application.properties
+application.local.properties
+credentials.json

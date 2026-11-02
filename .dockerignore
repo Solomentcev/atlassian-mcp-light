@@ -1,0 +1,14 @@
+# Исключаем лишние файлы из Docker образа
+*.md
+*.gradle
+*.source
+
+target
+.classpath
+.project
+
+*.iml
+
+*.log
+.DS_Store
+.env

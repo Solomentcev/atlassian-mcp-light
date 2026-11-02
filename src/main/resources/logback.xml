@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Конфигурация логирования atlassian-mcp-server.
+
+  ВАЖНО: логи пишутся только в System.err. System.out занят протоколом JSON-RPC:
+  любой вывод в stdout ломает протокол MCP, поэтому target указан явно.
+  Уровень логирования задаётся переменной окружения ATLASSIAN_LOG_LEVEL
+  (DEBUG, INFO, WARN, ERROR); по умолчанию INFO.
+-->
+<configuration>
+
+    <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="${ATLASSIAN_LOG_LEVEL:-INFO}">
+        <appender-ref ref="STDERR"/>
+    </root>
+
+</configuration>
