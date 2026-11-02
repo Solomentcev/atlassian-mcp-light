@@ -124,6 +124,8 @@ public class JdkHttpClientTest {
         } catch (IOException e) {
             assertNotNull(e.getMessage());
             assertTrue(e.getMessage().contains("HTTP 500"));
+            assertFalse("Тело HTTP-ответа не должно попадать в ошибку",
+                    e.getMessage().contains("boom"));
         }
     }
 
@@ -147,6 +149,8 @@ public class JdkHttpClientTest {
                     message.contains("%40example.com"));
             assertFalse("Секрет из query не должен попадать в текст ошибки: " + message,
                     message.contains("SECRET"));
+            assertFalse("Тело ответа не должно попадать в текст ошибки: " + message,
+                    message.contains("JQL is invalid"));
         }
     }
 }
