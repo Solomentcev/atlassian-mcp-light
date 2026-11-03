@@ -99,6 +99,7 @@ public class McpProtocol {
 
         String method = methodNode.asText();
         JsonNode metadata = params.get("_meta");
+        boolean invalidMetadata = params.has("_meta") && (metadata == null || !metadata.isObject());
         boolean modernRequest = "server/discover".equals(method)
                 || (metadata != null && metadata.isObject()
                 && (metadata.has(META_PROTOCOL_VERSION)
@@ -115,6 +116,10 @@ public class McpProtocol {
             }
             log.debug("Уведомление получено: method={}", method);
             return null;
+        }
+
+        if (invalidMetadata) {
+            return errorResponse(id, -32602, "Invalid params: _meta must be an object");
         }
 
         log.info("Запрос: method={}, id={}", method, id);
@@ -143,7 +148,7 @@ public class McpProtocol {
     }
 
     private static boolean isValidId(JsonNode id) {
-        return id != null && (id.isTextual() || id.isNumber());
+        return id != null && (id.isTextual() || id.isIntegralNumber());
     }
 
     private JsonNode handleInitialize(JsonNode id, JsonNode params) {
