@@ -64,7 +64,7 @@ public class ConfluenceService {
      * @throws IOException если запрос не удался
      */
     public String getPage(String pageId) throws IOException {
-        String url = baseUrl + "/rest/api/content/" + pageId + "?expand=body.storage,version";
+        String url = baseUrl + "/rest/api/content/" + encodePathSegment(pageId) + "?expand=body.storage,version";
         JsonNode json = parseResponse(client.get(url));
 
         String title = json.has("title") ? truncate(json.get("title").asText()) : "";
@@ -126,7 +126,7 @@ public class ConfluenceService {
      */
     public String updatePage(String pageId, String title, String content,
                              Integer version) throws IOException {
-        String getUrl = baseUrl + "/rest/api/content/" + pageId + "?expand=body.storage,version";
+        String getUrl = baseUrl + "/rest/api/content/" + encodePathSegment(pageId) + "?expand=body.storage,version";
         JsonNode currentPage = parseResponse(client.get(getUrl));
 
         int newVersion;
@@ -150,7 +150,7 @@ public class ConfluenceService {
         }
         payload.putObject("version").put("number", newVersion);
 
-        String putUrl = baseUrl + "/rest/api/content/" + pageId;
+        String putUrl = baseUrl + "/rest/api/content/" + encodePathSegment(pageId);
         client.put(putUrl, mapper.writeValueAsString(payload));
 
         return "Страница обновлена: ID " + pageId + ", новая версия: " + newVersion;
@@ -164,7 +164,7 @@ public class ConfluenceService {
      * @throws IOException если запрос не удался
      */
     public String getSpace(String spaceKey) throws IOException {
-        String url = baseUrl + "/rest/api/space/" + spaceKey;
+        String url = baseUrl + "/rest/api/space/" + encodePathSegment(spaceKey);
         JsonNode json = parseResponse(client.get(url));
 
         String key = json.has("key") ? truncate(json.get("key").asText()) : truncate(spaceKey);
@@ -270,6 +270,16 @@ public class ConfluenceService {
         }
 
         return combined;
+    }
+
+    /**
+     * Кодирует значение как отдельный сегмент пути URL.
+     *
+     * @param value исходное значение
+     * @return URL-кодированный сегмент пути
+     */
+    private static String encodePathSegment(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     /**
