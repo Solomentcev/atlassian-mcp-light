@@ -221,6 +221,20 @@ public class ConfigLoaderTest {
 
 
     @Test
+    public void systemPropertyOverridesPropertiesFile() throws IOException {
+        Path propertiesFile = writeFile("application.properties",
+                "jira.url=https://from-file.atlassian.net\n"
+                        + "jira.email=" + EMAIL + "\n"
+                        + "jira.token=" + TOKEN + "\n");
+        Properties systemProperties = new Properties();
+        systemProperties.setProperty("jira.url", "https://from-jvm.atlassian.net");
+
+        AppConfig config = ConfigLoader.of(env(), systemProperties, null, propertiesFile).load();
+
+        assertEquals("https://from-jvm.atlassian.net", config.getJiraUrl());
+    }
+
+    @Test
     public void propertiesPlaceholdersResolveEnvironmentAndDefaults() throws IOException {
         Path propertiesFile = writeFile("application.properties",
                 "jira.url=${JIRA_URL}\n"
