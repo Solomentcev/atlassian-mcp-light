@@ -1,5 +1,6 @@
 package ru.solomentsev.core.config;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
@@ -178,6 +179,19 @@ public final class AppConfig {
         if (trimmed.isEmpty()) {
             return null;
         }
+
+        URI uri;
+        try {
+            uri = URI.create(trimmed);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Некорректный URL Atlassian", e);
+        }
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null
+                || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null) {
+            throw new IllegalStateException(
+                    "URL Atlassian должен быть абсолютным HTTPS URL без user-info, query и fragment");
+        }
+
         return trimmed.replaceAll("/+$", "");
     }
 
