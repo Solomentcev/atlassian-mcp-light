@@ -1,6 +1,8 @@
 package ru.solomentsev.jira.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import ru.solomentsev.core.protocol.McpProtocol;
 import ru.solomentsev.core.protocol.ToolProvider;
 import ru.solomentsev.core.protocol.ToolSchema;
@@ -43,6 +45,7 @@ public final class JiraToolProvider implements ToolProvider {
                 "jira_get_issue",
                 "Получить краткую информацию о задаче Jira (заголовок, описание, статус)",
                 ToolSchema.create().requiredString("issue_key", "Ключ задачи (например, PROJ-123)").build(),
+                annotations(true, false, true),
                 args -> jiraService.getIssue(required(args, "issue_key"))));
 
         protocol.addTool(new ToolDefinition(
@@ -52,6 +55,7 @@ public final class JiraToolProvider implements ToolProvider {
                         .requiredString("jql", "JQL запрос (например, project = PROJ AND status = 'Open')")
                         .optionalInteger("limit", "Максимальное количество результатов (по умолчанию 5)", 1, 100)
                         .build(),
+                annotations(true, false, true),
                 args -> jiraService.search(required(args, "jql"),
                         args.has("limit") ? args.get("limit").asInt() : 5)));
 
@@ -64,6 +68,7 @@ public final class JiraToolProvider implements ToolProvider {
                         .requiredString("description", "Описание задачи")
                         .optionalString("issue_type", "Тип задачи (Bug, Task, Story). По умолчанию Bug")
                         .build(),
+                annotations(false, false, false),
                 args -> jiraService.createIssue(required(args, "project_key"),
                         required(args, "summary"), required(args, "description"),
                         args.has("issue_type") ? args.get("issue_type").asText() : "Bug")));
@@ -75,6 +80,7 @@ public final class JiraToolProvider implements ToolProvider {
                         .requiredString("issue_key", "Ключ задачи")
                         .requiredString("transition_name", "Название статуса (например, 'In Progress', 'Done')")
                         .build(),
+                annotations(false, true, false),
                 args -> jiraService.transition(required(args, "issue_key"),
                         required(args, "transition_name"))));
 
@@ -85,12 +91,14 @@ public final class JiraToolProvider implements ToolProvider {
                         .requiredString("issue_key", "Ключ задачи (например, PROJ-123)")
                         .requiredString("comment", "Текст комментария")
                         .build(),
+                annotations(false, false, false),
                 args -> jiraService.addComment(required(args, "issue_key"), required(args, "comment"))));
 
         protocol.addTool(new ToolDefinition(
                 "jira_get_project",
                 "Получить информацию о проекте Jira",
                 ToolSchema.create().requiredString("project_key", "Ключ проекта (например, PROJ)").build(),
+                annotations(true, false, true),
                 args -> jiraService.getProject(required(args, "project_key"))));
 
         protocol.addTool(new ToolDefinition(
@@ -99,7 +107,25 @@ public final class JiraToolProvider implements ToolProvider {
                 ToolSchema.create()
                         .requiredString("user_identifier", "Ключ пользователя или имя пользователя")
                         .build(),
+                annotations(true, false, true),
                 args -> jiraService.getUser(required(args, "user_identifier"))));
+    }
+
+    /**
+     * Создаёт подсказки MCP о свойствах инструмента.
+     *
+     * @param readOnly признак операции только для чтения
+     * @param destructive признак потенциально разрушающего изменения
+     * @param idempotent признак идемпотентности операции
+     * @return объект аннотаций MCP
+     */
+    private static ObjectNode annotations(boolean readOnly, boolean destructive, boolean idempotent) {
+        ObjectNode annotations = JsonNodeFactory.instance.objectNode();
+        annotations.put("readOnlyHint", readOnly);
+        annotations.put("destructiveHint", destructive);
+        annotations.put("idempotentHint", idempotent);
+        annotations.put("openWorldHint", true);
+        return annotations;
     }
 
     /**
