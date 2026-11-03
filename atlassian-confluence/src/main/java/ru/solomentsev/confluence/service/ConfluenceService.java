@@ -184,6 +184,7 @@ public class ConfluenceService {
      * @param limit максимальное количество пространств
      * @return строка со списком пространств
      * @throws IOException если запрос не удался
+     * @throws IllegalArgumentException если limit не входит в диапазон 1..100
      */
     public String listSpaces(int limit) throws IOException {
         validateSearchLimit(limit);
