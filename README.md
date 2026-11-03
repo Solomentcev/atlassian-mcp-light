@@ -53,14 +53,13 @@ MCP-сервер на Java для работы AI-агентов с Jira и Conf
 
 Сервер использует HTTP Basic-аутентификацию с парой `JIRA_EMAIL:JIRA_TOKEN`. Для Atlassian Cloud создайте API-токен в [настройках безопасности Atlassian](https://id.atlassian.com/manage-profile/security/api-tokens). Bearer-аутентификация с Personal Access Token не реализована.
 
-Параметры можно задать переменными окружения или в файле `.env`:
+Для локального запуска скопируйте шаблон конфигурации и заполните его:
 
-```dotenv
-JIRA_URL=https://company.atlassian.net
-JIRA_EMAIL=user@company.com
-JIRA_TOKEN=your-api-token
-# CONFLUENCE_URL=https://company.atlassian.net/wiki
+```bash
+cp .env.example .env
 ```
+
+Файл `.env` содержит секреты и исключён из Git. Не публикуйте его и не добавляйте токены в репозиторий.
 
 Также поддерживается файл `application.properties`:
 
@@ -74,8 +73,6 @@ jira.token=your-api-token
 Источники настроек применяются в таком порядке: свойства JVM, переменные окружения, файл `.env`, файл `application.properties`. Путь к файлу можно задать через `ATLASSIAN_ENV_FILE` или `ATLASSIAN_PROPERTIES_FILE` (либо соответствующие свойства JVM `atlassian.env.file` и `atlassian.properties.file`). Без явно заданного пути файлы ищутся в рабочем каталоге и рядом с JAR; для `application.properties` дополнительно проверяется classpath. Поэтому файл настроек можно разместить рядом с JAR-файлом, если рабочий каталог MCP-клиента неизвестен.
 
 **Важно:** `JIRA_URL`, `JIRA_EMAIL` и `JIRA_TOKEN` обязательны даже при использовании только инструментов Confluence. Для Atlassian Server/Data Center укажите отдельный `CONFLUENCE_URL`, если адрес Confluence не соответствует `JIRA_URL/wiki`.
-
-Не добавляйте файлы с токенами в Git и не передавайте секреты в публичные логи.
 
 ## Сборка и запуск
 
@@ -130,7 +127,11 @@ java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 
 ## Docker
 
-Сначала создайте в корне проекта файл `.env` с обязательными параметрами из раздела «Конфигурация». Файл нужен и Docker Compose, поскольку он указан в `env_file`.
+Перед запуском создайте файл `.env` из шаблона и заполните обязательные параметры:
+
+```bash
+cp .env.example .env
+```
 
 Сборка образа:
 
@@ -144,7 +145,7 @@ docker compose build
 docker compose run --rm -i atlassian-mcp-server
 ```
 
-Сервер использует STDIO, поэтому контейнер должен работать в интерактивном режиме без псевдотерминала. Не используйте `docker compose up -d` или флаг Docker `-t`: MCP-клиент должен обмениваться данными с процессом через `stdin/stdout`.
+Docker Compose использует `.env` через `env_file`. Сервер работает по STDIO, поэтому контейнер должен запускаться в интерактивном режиме без псевдотерминала. Не используйте `docker compose up -d` или флаг Docker `-t`: MCP-клиент должен обмениваться данными с процессом через `stdin/stdout`.
 
 ## Структура проекта
 
