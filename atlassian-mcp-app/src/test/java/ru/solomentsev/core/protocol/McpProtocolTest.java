@@ -441,6 +441,18 @@ public class McpProtocolTest {
 
 
     @Test
+    public void requestMethodWithoutIdReturnsInvalidRequestError() {
+        ObjectNode request = MAPPER.createObjectNode();
+        request.put("jsonrpc", "2.0");
+        request.put("method", "server/discover");
+        request.set("params", MAPPER.createObjectNode());
+
+        JsonNode response = new McpProtocol().processRequest(request);
+
+        assertEquals(-32600, response.get("error").get("code").asInt());
+    }
+
+    @Test
     public void fractionalIdReturnsInvalidRequestError() {
         ObjectNode request = request("ping");
         request.put("id", 1.5);
