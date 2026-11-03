@@ -186,12 +186,12 @@ public class ConfluenceServiceTest {
         String firstUrl = BASE_URL + "/rest/api/content?cql=space+%3D+%27TEST%27&limit=5";
         String secondUrl = firstUrl + "&start=1";
         client.onGet(firstUrl,
-                "{\\"results\\":[{\\"id\\":\\"123\\",\\"title\\":\\"First page\\","
-                        + "\\"space\\":{\\"key\\":\\"TEST\\"}}],"
-                        + "\\"_links\\":{\\"next\\":\\"/rest/api/content?start=1\\"}}");
+                "{\"results\":[{\"id\":\"123\",\"title\":\"First page\","
+                        + "\"space\":{\"key\":\"TEST\"}}],"
+                        + "\"_links\":{\"next\":\"/rest/api/content?start=1\"}}");
         client.onGet(secondUrl,
-                "{\\"results\\":[{\\"id\\":\\"456\\",\\"title\\":\\"Second page\\","
-                        + "\\"space\\":{\\"key\\":\\"TEST\\"}}]}");
+                "{\"results\":[{\"id\":\"456\",\"title\":\"Second page\","
+                        + "\"space\":{\"key\":\"TEST\"}}]}");
 
         String output = service.search("space = 'TEST'", 5);
 
