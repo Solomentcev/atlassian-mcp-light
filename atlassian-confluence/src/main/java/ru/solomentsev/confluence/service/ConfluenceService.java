@@ -207,6 +207,7 @@ public class ConfluenceService {
      * @param limit максимальное количество результатов
      * @return строка со списком найденных страниц
      * @throws IOException если запрос не удался
+     * @throws IllegalArgumentException если limit не входит в диапазон 1..100
      */
     public String search(String cql, int limit) throws IOException {
         validateSearchLimit(limit);
