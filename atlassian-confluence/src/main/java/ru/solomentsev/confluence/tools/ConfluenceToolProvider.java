@@ -1,6 +1,8 @@
 package ru.solomentsev.confluence.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import ru.solomentsev.core.protocol.McpProtocol;
 import ru.solomentsev.core.protocol.ToolProvider;
 import ru.solomentsev.core.protocol.ToolSchema;
@@ -43,6 +45,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                 "confluence_get_page",
                 "Прочитать страницу Confluence по ID",
                 ToolSchema.create().requiredString("page_id", "ID страницы Confluence").build(),
+                annotations(true, false, true),
                 args -> confluenceService.getPage(required(args, "page_id"))));
 
         protocol.addTool(new ToolDefinition(
@@ -51,6 +54,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                 ToolSchema.create()
                         .optionalInteger("limit", "Максимальное количество пространств (по умолчанию 25)", 1, 100)
                         .build(),
+                annotations(true, false, true),
                 args -> confluenceService.listSpaces(args.has("limit") ? args.get("limit").asInt() : 25)));
 
         protocol.addTool(new ToolDefinition(
@@ -59,6 +63,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                 ToolSchema.create()
                         .requiredString("space_key", "Ключ пространства Confluence")
                         .build(),
+                annotations(true, false, true),
                 args -> confluenceService.getSpace(required(args, "space_key"))));
 
         protocol.addTool(new ToolDefinition(
@@ -68,6 +73,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                         .requiredString("cql", "CQL запрос (например, space = 'TEST' AND title ~ 'документ')")
                         .optionalInteger("limit", "Максимальное количество результатов (по умолчанию 5)", 1, 100)
                         .build(),
+                annotations(true, false, true),
                 args -> confluenceService.search(required(args, "cql"),
                         args.has("limit") ? args.get("limit").asInt() : 5)));
 
@@ -80,6 +86,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                         .requiredString("content", "HTML-содержимое страницы")
                         .optionalString("parent_id", "ID родительской страницы (опционально)")
                         .build(),
+                annotations(false, false, false),
                 args -> confluenceService.createPage(required(args, "space_key"),
                         required(args, "title"), required(args, "content"),
                         args.has("parent_id") ? args.get("parent_id").asText() : null)));
@@ -93,6 +100,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                         .optionalString("title", "Новый заголовок страницы (опционально)")
                         .optionalString("content", "Новое HTML-содержимое страницы (опционально)")
                         .build(),
+                annotations(false, true, false),
                 args -> {
                     String pageId = required(args, "page_id");
                     String title = args.has("title") ? args.get("title").asText() : null;
@@ -104,6 +112,23 @@ public final class ConfluenceToolProvider implements ToolProvider {
                     Integer version = args.has("version") ? args.get("version").asInt() : null;
                     return confluenceService.updatePage(pageId, title, content, version);
                 }));
+    }
+
+    /**
+     * Создаёт подсказки MCP о свойствах инструмента.
+     *
+     * @param readOnly признак операции только для чтения
+     * @param destructive признак потенциально разрушающего изменения
+     * @param idempotent признак идемпотентности операции
+     * @return объект аннотаций MCP
+     */
+    private static ObjectNode annotations(boolean readOnly, boolean destructive, boolean idempotent) {
+        ObjectNode annotations = JsonNodeFactory.instance.objectNode();
+        annotations.put("readOnlyHint", readOnly);
+        annotations.put("destructiveHint", destructive);
+        annotations.put("idempotentHint", idempotent);
+        annotations.put("openWorldHint", true);
+        return annotations;
     }
 
     /**
