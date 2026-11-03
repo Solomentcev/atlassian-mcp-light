@@ -353,8 +353,6 @@ docker run -i --rm --env-file .env atlassian-mcp-server
 
 Ошибки выполнения возвращаются в поле `result.isError` с текстом в `result.content[0].text`, поэтому агент может их показать пользователю.
 
----
-
 ## Структура проекта
 
 Проект разделён на четыре Maven-модуля:
