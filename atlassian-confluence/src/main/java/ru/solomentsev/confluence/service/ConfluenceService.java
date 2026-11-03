@@ -130,6 +130,9 @@ public class ConfluenceService {
         if (title == null && content == null) {
             throw new IllegalArgumentException("Нужно передать title или content для обновления страницы");
         }
+        if (version != null && version < 1) {
+            throw new IllegalArgumentException("version должен быть положительным");
+        }
 
         String getUrl = baseUrl + "/rest/api/content/" + encodePathSegment(pageId)
                 + "?expand=body.storage,version,space";
@@ -146,9 +149,6 @@ public class ConfluenceService {
 
         int currentVersion;
         if (version != null) {
-            if (version < 1) {
-                throw new IllegalArgumentException("version должен быть положительным");
-            }
             currentVersion = version;
         } else {
             JsonNode currentVersionNode = currentPage.path("version").path("number");
