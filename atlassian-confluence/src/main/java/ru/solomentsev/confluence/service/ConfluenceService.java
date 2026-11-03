@@ -122,38 +122,63 @@ public class ConfluenceService {
      * @param content новое содержимое (опционально)
      * @param version текущая версия страницы (опционально, определяется автоматически)
      * @return строка с подтверждением операции
-     * @throws IOException если запрос не удался
+     * @throws IOException если запрос не удался или ответ не содержит обязательные данные страницы
+     * @throws IllegalArgumentException если не переданы поля для обновления или версия недопустима
      */
     public String updatePage(String pageId, String title, String content,
                              Integer version) throws IOException {
-        String getUrl = baseUrl + "/rest/api/content/" + encodePathSegment(pageId) + "?expand=body.storage,version";
+        if (title == null && content == null) {
+            throw new IllegalArgumentException("Нужно передать title или content для обновления страницы");
+        }
+
+        String getUrl = baseUrl + "/rest/api/content/" + encodePathSegment(pageId)
+                + "?expand=body.storage,version,space";
         JsonNode currentPage = parseResponse(client.get(getUrl));
 
-        int newVersion;
-        if (currentPage.has("version") && currentPage.get("version").has("number")) {
-            newVersion = currentPage.get("version").get("number").asInt() + 1;
-        } else if (version != null) {
-            newVersion = version + 1;
+        String effectiveTitle = title;
+        if (effectiveTitle == null) {
+            JsonNode currentTitle = currentPage.path("title");
+            if (!currentTitle.isTextual() || currentTitle.asText().isBlank()) {
+                throw new IOException("В ответе Confluence отсутствует заголовок страницы " + pageId);
+            }
+            effectiveTitle = currentTitle.asText();
+        }
+
+        int currentVersion;
+        if (version != null) {
+            currentVersion = version;
         } else {
-            newVersion = 1;
+            JsonNode currentVersionNode = currentPage.path("version").path("number");
+            if (!currentVersionNode.canConvertToInt() || currentVersionNode.asInt() < 1) {
+                throw new IOException("В ответе Confluence отсутствует текущая версия страницы " + pageId);
+            }
+            currentVersion = currentVersionNode.asInt();
+        }
+        if (currentVersion == Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Номер версии страницы превышает допустимое значение");
         }
 
         ObjectNode payload = mapper.createObjectNode();
-        payload.put("type", "page");
-        if (title != null) {
-            payload.put("title", title);
+        payload.put("id", pageId);
+        payload.put("type", currentPage.path("type").asText("page"));
+        payload.put("title", effectiveTitle);
+
+        JsonNode spaceKey = currentPage.path("space").path("key");
+        if (spaceKey.isTextual() && !spaceKey.asText().isBlank()) {
+            payload.putObject("space").put("key", spaceKey.asText());
         }
+
         if (content != null) {
             ObjectNode storage = payload.putObject("body").putObject("storage");
             storage.put("value", content);
             storage.put("representation", "storage");
         }
-        payload.putObject("version").put("number", newVersion);
+        payload.putObject("version").put("number", currentVersion + 1);
 
         String putUrl = baseUrl + "/rest/api/content/" + encodePathSegment(pageId);
         client.put(putUrl, mapper.writeValueAsString(payload));
 
-        return "Страница обновлена: ID " + pageId + ", новая версия: " + newVersion;
+        return "Страница обновлена: ID " + pageId + ", новая версия: " + (currentVersion + 1);
     }
 
     /**
