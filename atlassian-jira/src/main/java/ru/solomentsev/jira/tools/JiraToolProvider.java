@@ -1,14 +1,14 @@
 package ru.solomentsev.jira.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import ru.solomentsev.protocol.McpProtocol;
-import ru.solomentsev.protocol.ToolProvider;
-import ru.solomentsev.protocol.ToolSchema;
-import ru.solomentsev.service.JiraService;
+import ru.solomentsev.core.protocol.McpProtocol;
+import ru.solomentsev.core.protocol.ToolProvider;
+import ru.solomentsev.core.protocol.ToolSchema;
+import ru.solomentsev.jira.service.JiraService;
 
 import java.util.Objects;
 
-import static ru.solomentsev.protocol.McpProtocol.ToolDefinition;
+import static ru.solomentsev.core.protocol.McpProtocol.ToolDefinition;
 
 /**
  * Регистрирует MCP-инструменты для работы с Jira.
