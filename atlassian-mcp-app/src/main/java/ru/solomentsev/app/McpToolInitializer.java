@@ -2,12 +2,8 @@ package ru.solomentsev.app;
 
 import ru.solomentsev.core.protocol.McpProtocol;
 import ru.solomentsev.core.protocol.ToolProvider;
-import ru.solomentsev.confluence.tools.ConfluenceToolProvider;
-import ru.solomentsev.jira.tools.JiraToolProvider;
-import ru.solomentsev.confluence.service.ConfluenceService;
-import ru.solomentsev.jira.service.JiraService;
-
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Инициализирует инструменты подключённых продуктов Atlassian в MCP-протоколе.
@@ -23,18 +19,15 @@ public final class McpToolInitializer {
     }
 
     /**
-     * Инициализирует инструменты Jira и Confluence.
+     * Регистрирует инструменты всех переданных продуктов в MCP-протоколе.
      *
      * @param protocol MCP-протокол
-     * @param jiraService сервис Jira
-     * @param confluenceService сервис Confluence
+     * @param providers поставщики инструментов подключённых продуктов
+     * @throws NullPointerException если протокол, список или один из поставщиков не задан
      */
-    public static void initialize(McpProtocol protocol,
-                                  JiraService jiraService,
-                                  ConfluenceService confluenceService) {
-        List<ToolProvider> providers = List.of(
-                new JiraToolProvider(jiraService),
-                new ConfluenceToolProvider(confluenceService));
-        providers.forEach(provider -> provider.register(protocol));
+    public static void initialize(McpProtocol protocol, List<? extends ToolProvider> providers) {
+        Objects.requireNonNull(protocol, "protocol");
+        List.copyOf(Objects.requireNonNull(providers, "providers"))
+                .forEach(provider -> provider.register(protocol));
     }
 }
