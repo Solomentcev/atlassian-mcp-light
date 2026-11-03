@@ -110,8 +110,9 @@ public class ConfluenceServiceTest {
 
     @Test
     public void updatePageIncrementsCurrentVersion() throws IOException {
-        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version",
-                "{\"id\":\"123\",\"version\":{\"number\":4}}");
+        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version,space",
+                "{\"id\":\"123\",\"type\":\"page\",\"title\":\"Old title\","
+                        + "\"space\":{\"key\":\"TEST\"},\"version\":{\"number\":4}}");
         client.onPut(BASE_URL + "/rest/api/content/123", "{}");
 
         String output = service.updatePage("123", "New title", "<p>New</p>", null);
@@ -126,8 +127,9 @@ public class ConfluenceServiceTest {
 
     @Test
     public void updatePageIncrementsExplicitVersionWhenServerResponseHasNoVersion() throws IOException {
-        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version",
-                "{\"id\":\"123\"}");
+        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version,space",
+                "{\"id\":\"123\",\"type\":\"page\",\"title\":\"Old title\","
+                        + "\"space\":{\"key\":\"TEST\"}}");
         client.onPut(BASE_URL + "/rest/api/content/123", "{}");
 
         service.updatePage("123", "New title", "<p>New</p>", 4);
@@ -138,8 +140,9 @@ public class ConfluenceServiceTest {
 
     @Test
     public void updatePageOmitsAbsentFields() throws IOException {
-        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version",
-                "{\"id\":\"123\",\"version\":{\"number\":1}}");
+        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version,space",
+                "{\"id\":\"123\",\"type\":\"page\",\"title\":\"Old title\","
+                        + "\"space\":{\"key\":\"TEST\"},\"version\":{\"number\":1}}");
         client.onPut(BASE_URL + "/rest/api/content/123", "{}");
 
         service.updatePage("123", "Only title", null, null);
@@ -147,6 +150,43 @@ public class ConfluenceServiceTest {
         String body = client.getLastRequest().body();
         assertTrue(body.contains("\"title\":\"Only title\""));
         assertTrue(!body.contains("\"body\""));
+    }
+
+    @Test
+    public void updatePagePreservesCurrentTitleWhenOnlyContentChanges() throws IOException {
+        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version,space",
+                "{\"id\":\"123\",\"type\":\"page\",\"title\":\"Existing title\","
+                        + "\"space\":{\"key\":\"DOCS\"},\"version\":{\"number\":7}}");
+        client.onPut(BASE_URL + "/rest/api/content/123", "{}");
+
+        service.updatePage("123", null, "<p>Updated body</p>", null);
+
+        String body = client.getLastRequest().body();
+        assertTrue(body.contains("\"title\":\"Existing title\""));
+        assertTrue(body.contains("\"space\":{\"key\":\"DOCS\"}"));
+        assertTrue(body.contains("\"body\":{\"storage\":{\"value\":\"<p>Updated body</p>\""));
+        assertTrue(body.contains("\"version\":{\"number\":8}"));
+    }
+
+    @Test
+    public void updatePageUsesExplicitCurrentVersionInsteadOfFetchedVersion() throws IOException {
+        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version,space",
+                "{\"id\":\"123\",\"type\":\"page\",\"title\":\"Existing title\","
+                        + "\"space\":{\"key\":\"DOCS\"},\"version\":{\"number\":9}}");
+        client.onPut(BASE_URL + "/rest/api/content/123", "{}");
+
+        service.updatePage("123", "New title", null, 4);
+
+        assertTrue(client.getLastRequest().body().contains("\"version\":{\"number\":5}"));
+    }
+
+    @Test
+    public void updatePageRejectsMissingFieldsAndMissingVersion() throws IOException {
+        assertThrows(IllegalArgumentException.class, () -> service.updatePage("123", null, null, null));
+
+        client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version,space",
+                "{\"id\":\"123\",\"title\":\"Existing title\"}");
+        assertThrows(IOException.class, () -> service.updatePage("123", null, "<p>Body</p>", null));
     }
 
     @Test
