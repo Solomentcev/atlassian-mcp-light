@@ -183,6 +183,8 @@ public class ConfluenceServiceTest {
     @Test
     public void updatePageRejectsMissingFieldsAndMissingVersion() throws IOException {
         assertThrows(IllegalArgumentException.class, () -> service.updatePage("123", null, null, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.updatePage("123", "Title", null, 0));
 
         client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version,space",
                 "{\"id\":\"123\",\"title\":\"Existing title\"}");
