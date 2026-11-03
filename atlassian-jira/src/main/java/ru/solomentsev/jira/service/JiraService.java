@@ -123,6 +123,7 @@ public class JiraService {
      * @param limit максимум результатов (по умолчанию 5)
      * @return строка со списком найденных задач (JSON array)
      * @throws IOException если запрос не удался
+     * @throws IllegalArgumentException если limit не входит в диапазон 1..100
      */
     public String search(String jql, int limit) throws IOException {
         validateSearchLimit(limit);
