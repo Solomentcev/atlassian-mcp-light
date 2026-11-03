@@ -7,7 +7,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import ru.solomentsev.core.client.HttpClient;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -123,34 +125,56 @@ public class JiraService {
      * @throws IOException если запрос не удался
      */
     public String search(String jql, int limit) throws IOException {
-        ObjectNode payload = mapper.createObjectNode();
-        payload.put("jql", withSearchRestriction(jql));
-        payload.put("maxResults", limit);
-        ArrayNode fields = mapper.createArrayNode();
-        fields.add("summary");
-        fields.add("status");
-        payload.set("fields", fields);
-
         String url = baseUrl + SEARCH_API;
-        JsonNode json = parseResponse(client.post(url, mapper.writeValueAsString(payload)));
-        ArrayNode issues = json.has("issues") && json.get("issues").isArray()
-                ? (ArrayNode) json.get("issues")
-                : mapper.createArrayNode();
-
         ArrayNode results = mapper.createArrayNode();
-        for (JsonNode issue : issues) {
-            ObjectNode item = mapper.createObjectNode();
-            item.put("key", issue.has("key") ? issue.get("key").asText() : "");
-            if (issue.has("fields")) {
-                JsonNode f = issue.get("fields");
-                if (f.has("summary")) {
-                    item.put("summary", truncate(f.get("summary").asText()));
+        Set<String> requestedPageTokens = new HashSet<>();
+        String nextPageToken = null;
+
+        while (results.size() < limit) {
+            ObjectNode payload = mapper.createObjectNode();
+            payload.put("jql", withSearchRestriction(jql));
+            payload.put("maxResults", limit - results.size());
+            ArrayNode fields = mapper.createArrayNode();
+            fields.add("summary");
+            fields.add("status");
+            payload.set("fields", fields);
+            if (nextPageToken != null) {
+                if (!requestedPageTokens.add(nextPageToken)) {
+                    throw new IOException("Jira вернула повторяющийся nextPageToken");
                 }
-                if (f.has("status") && f.get("status").has("name")) {
-                    item.put("status", truncate(f.get("status").get("name").asText()));
-                }
+                payload.put("nextPageToken", nextPageToken);
             }
-            results.add(item);
+
+            JsonNode page = parseResponse(client.post(url, mapper.writeValueAsString(payload)));
+            JsonNode issues = page.path("issues");
+            if (!issues.isArray() || issues.isEmpty()) {
+                break;
+            }
+
+            for (JsonNode issue : issues) {
+                if (results.size() >= limit) {
+                    break;
+                }
+                ObjectNode item = mapper.createObjectNode();
+                item.put("key", issue.has("key") ? issue.get("key").asText() : "");
+                if (issue.has("fields")) {
+                    JsonNode f = issue.get("fields");
+                    if (f.has("summary")) {
+                        item.put("summary", truncate(f.get("summary").asText()));
+                    }
+                    if (f.has("status") && f.get("status").has("name")) {
+                        item.put("status", truncate(f.get("status").get("name").asText()));
+                    }
+                }
+                results.add(item);
+            }
+
+            JsonNode nextToken = page.get("nextPageToken");
+            if (results.size() >= limit || nextToken == null
+                    || !nextToken.isTextual() || nextToken.asText().isBlank()) {
+                break;
+            }
+            nextPageToken = nextToken.asText();
         }
 
         return mapper.writeValueAsString(results);
