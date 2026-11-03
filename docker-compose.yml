@@ -12,9 +12,8 @@ services:
     # Явно указываем переменные окружения (опционально, можно задать через .env)
     environment:
       - ATLASSIAN_LOG_LEVEL=${ATLASSIAN_LOG_LEVEL:-INFO}
-    # Логи в stdout/stderr (MCP-сервер использует stdout для JSON-RPC)
-    # Логирование идёт в stderr, stdout остаётся чистым для протокола
-    # Важно: не перенаправлять stdout в логи, иначе MCP-клиент не сможет разобрать ответы
+    # Логи приложения направляются в stderr; stdout зарезервирован для JSON-RPC.
+    # Не перенаправлять stdout в логи, иначе MCP-клиент не сможет разобрать ответы
     logging:
       driver: "json-file"
       options:
