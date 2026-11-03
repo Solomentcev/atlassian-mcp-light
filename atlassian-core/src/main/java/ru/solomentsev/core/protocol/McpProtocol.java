@@ -129,6 +129,8 @@ public class McpProtocol {
             String toolName = nameNode.asText();
             JsonNode arguments = params.has("arguments")
                     ? params.get("arguments") : mapper.createObjectNode();
+            log.debug("Вызов инструмента: {} (аргументы: {})",
+                    toolName, argumentNames(arguments));
             String output = dispatch(toolName, arguments);
 
             ObjectNode result = mapper.createObjectNode();
