@@ -109,6 +109,10 @@ public class McpProtocol {
         // Уведомления никогда не получают ответ. В stateless-режиме они также
         // не меняют состояние процесса или последующих запросов.
         if (!request.has("id")) {
+            if (isRequestMethod(method)) {
+                return errorResponse(NullNode.getInstance(), -32600,
+                        "Invalid Request: request ID is required");
+            }
             if (!modernRequest && "notifications/initialized".equals(method)
                     && lifecycleState == LifecycleState.INITIALIZATION_PENDING) {
                 lifecycleState = LifecycleState.READY;
@@ -145,6 +149,20 @@ public class McpProtocol {
             default:
                 return errorResponse(id, -32601, "Неизвестный метод: " + method);
         }
+    }
+
+    /**
+     * Проверяет, относится ли метод к типам MCP, которые всегда являются запросами.
+     *
+     * @param method имя метода
+     * @return true, если для метода обязателен идентификатор запроса
+     */
+    private static boolean isRequestMethod(String method) {
+        return "initialize".equals(method)
+                || "server/discover".equals(method)
+                || "tools/list".equals(method)
+                || "tools/call".equals(method)
+                || "ping".equals(method);
     }
 
     private static boolean isValidId(JsonNode id) {
