@@ -106,10 +106,10 @@ public class JiraServiceTest {
             public String post(String url, String jsonBody) {
                 requestBodies.add(jsonBody);
                 if (requestBodies.size() == 1) {
-                    return "{\\"issues\\":[{\\"key\\":\\"PROJ-1\\",\\"fields\\":{\\"summary\\":\\"First\\"}}],"
-                            + "\\"nextPageToken\\":\\"cursor-2\\"}";
+                    return "{\"issues\":[{\"key\":\"PROJ-1\",\"fields\":{\"summary\":\"First\"}}],"
+                            + "\"nextPageToken\":\"cursor-2\"}";
                 }
-                return "{\\"issues\\":[{\\"key\\":\\"PROJ-2\\",\\"fields\\":{\\"summary\\":\\"Second\\"}}]}";
+                return "{\"issues\":[{\"key\":\"PROJ-2\",\"fields\":{\"summary\":\"Second\"}}]}";
             }
 
             @Override
@@ -125,8 +125,8 @@ public class JiraServiceTest {
         assertEquals("PROJ-1", results.get(0).get("key").asText());
         assertEquals("PROJ-2", results.get(1).get("key").asText());
         assertEquals(2, requestBodies.size());
-        assertTrue(requestBodies.get(1).contains("\\"nextPageToken\\":\\"cursor-2\\""));
-        assertTrue(requestBodies.get(1).contains("\\"maxResults\\":1"));
+        assertTrue(requestBodies.get(1).contains("\"nextPageToken\":\"cursor-2\""));
+        assertTrue(requestBodies.get(1).contains("\"maxResults\":1"));
     }
 
     @Test
