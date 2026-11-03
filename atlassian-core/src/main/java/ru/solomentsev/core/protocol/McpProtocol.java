@@ -38,6 +38,15 @@ public class McpProtocol {
 
     private final List<ToolDefinition> tools = new ArrayList<>();
 
+    /** Текущее состояние жизненного цикла соединения MCP. */
+    private LifecycleState lifecycleState = LifecycleState.NEW;
+
+    private enum LifecycleState {
+        NEW,
+        INITIALIZATION_PENDING,
+        READY
+    }
+
     /**
      * Обрабатывает JSON-RPC запрос или уведомление.
      *
@@ -62,22 +71,29 @@ public class McpProtocol {
                     -32600, "Invalid Request");
         }
 
+        String method = methodNode.asText();
+
         // Только отсутствие id означает уведомление. id:null не является уведомлением.
         if (!request.has("id")) {
-            log.debug("Уведомление получено: method={}", methodNode.asText());
+            if ("notifications/initialized".equals(method)
+                    && lifecycleState == LifecycleState.INITIALIZATION_PENDING) {
+                lifecycleState = LifecycleState.READY;
+                log.info("MCP-соединение перешло в рабочее состояние");
+            }
+            log.debug("Уведомление получено: method={}", method);
             return null;
         }
-
-        String method = methodNode.asText();
         log.info("Запрос: method={}, id={}", method, id);
 
         switch (method) {
             case "initialize":
                 return handleInitialize(id, params);
             case "tools/list":
-                return handleToolsList(id);
+                return lifecycleState == LifecycleState.READY
+                        ? handleToolsList(id) : serverNotInitialized(id);
             case "tools/call":
-                return handleToolCall(id, params);
+                return lifecycleState == LifecycleState.READY
+                        ? handleToolCall(id, params) : serverNotInitialized(id);
             case "ping":
                 return successResponse(id, mapper.createObjectNode());
             default:
@@ -90,6 +106,10 @@ public class McpProtocol {
     }
 
     private JsonNode handleInitialize(JsonNode id, JsonNode params) {
+        if (lifecycleState != LifecycleState.NEW) {
+            return errorResponse(id, -32600, "Invalid Request: initialize has already been processed");
+        }
+
         JsonNode requestedVersion = params.get("protocolVersion");
         JsonNode clientCapabilities = params.get("capabilities");
         JsonNode clientInfo = params.get("clientInfo");
@@ -102,7 +122,7 @@ public class McpProtocol {
                     "Invalid params: initialize requires protocolVersion, capabilities and clientInfo");
         }
 
-        // Сервер поддерживает только PROTOCOL_VERSION. При несовпадении
+        // Сервер поддерживает только PROTOCOL_VERSION: при несовпадении
         // сообщает клиенту единственную поддерживаемую версию.
         ObjectNode result = mapper.createObjectNode();
         result.put("protocolVersion", PROTOCOL_VERSION);
@@ -113,7 +133,12 @@ public class McpProtocol {
         serverInfo.put("name", SERVER_NAME);
         serverInfo.put("version", SERVER_VERSION);
         result.set("serverInfo", serverInfo);
+        lifecycleState = LifecycleState.INITIALIZATION_PENDING;
         return successResponse(id, result);
+    }
+
+    private JsonNode serverNotInitialized(JsonNode id) {
+        return errorResponse(id, -32002, "Server not initialized");
     }
 
     private static boolean isValidImplementation(JsonNode implementation) {
