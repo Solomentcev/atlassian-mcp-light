@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.Before;
 import org.junit.Test;
 import ru.solomentsev.core.client.FakeHttpClient;
+import ru.solomentsev.app.ToolRegistrar;
 import ru.solomentsev.confluence.service.ConfluenceService;
 import ru.solomentsev.jira.service.JiraService;
 
