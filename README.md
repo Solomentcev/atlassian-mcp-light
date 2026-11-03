@@ -265,40 +265,35 @@ ATLASSIAN_LOG_LEVEL=DEBUG java -jar atlassian-mcp-app/target/atlassian-mcp-serve
 
 ## Запуск в Docker
 
-Проект включает `Dockerfile` (multi-stage сборка) и `docker-compose.yml` для удобного запуска.
+Проект включает `Dockerfile` (multi-stage сборка) и `docker-compose.yml` для запуска MCP-сервера через STDIO.
 
-### Быстрый старт (через docker-compose)
+MCP-сервер не является фоновым HTTP-сервисом: MCP-клиент должен запускать его как дочерний процесс и обмениваться сообщениями через `stdin/stdout`. Поэтому не используйте `docker compose up -d` и не запускайте контейнер с TTY.
 
-1. **Создайте файл `.env`** на основе примера (не коммитьте в git!):
+### Сборка образа
 
-   ```bash
-   cp .env.example .env
-   # Отредактируйте .env — укажите свои JIRA_URL, JIRA_EMAIL, JIRA_TOKEN
-   ```
-
-2. **Запустите контейнер:**
-
-   ```bash
-   docker compose up --build -d
-   ```
-
-   > **Важно:** MCP-сервер работает в интерактивном режиме (stdin/stdout для JSON-RPC).
-   > `docker-compose.yml` настроен с `tty: true` и `stdin_open: true`.
-   > Для подключения MCP-клиента (Claude Desktop, Cline) используйте команду запуска контейнера напрямую (см. ниже).
-
-### Ручной запуск (для подключения MCP-клиентов)
-
-MCP-клиенты (Claude Desktop, Cline, Cursor) ожидают запускать сервер как дочерний процесс и общаться с ним через stdin/stdout. Docker-контейнер нужно запускать в интерактивном режиме:
+Создайте файл `.env` на основе примера и укажите учётные данные:
 
 ```bash
-# Сборка образа
-docker build -t atlassian-mcp-server .
-
-# Запуск в интерактивном режиме (stdin/stdout доступны для MCP-клиента)
-docker run -i --rm \
-  --env-file .env \
-  atlassian-mcp-server
+cp .env.example .env
+docker compose build
 ```
+
+### Запуск через Docker Compose
+
+Из каталога проекта выполните:
+
+```bash
+docker compose run --rm -i atlassian-mcp-server
+```bash
+
+Команда запускает контейнер в интерактивном режиме без псевдотерминала. `stdin` остаётся открытым, `stdout` используется только для JSON-RPC, диагностические сообщения выводятся в `stderr`.
+
+### Запуск напрямую через Docker
+
+```bash
+docker build -t atlassian-mcp-server .
+docker run -i --rm --env-file .env atlassian-mcp-server
+```bash
 
 **Пример конфигурации для Claude Desktop (`claude_desktop_config.json`):**
 
@@ -317,29 +312,13 @@ docker run -i --rm \
 }
 ```
 
-**Пример для Cline / VS Code (`mcp.json` или настройки расширения):**
+Для Cline, Cursor и других MCP-клиентов используется аналогичная конфигурация с `docker run -i --rm`.
 
-```json
-{
-  "mcpServers": {
-    "atlassian": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "--env-file", "${workspaceFolder}/.env",
-        "atlassian-mcp-server"
-      ]
-    }
-  }
-}
-```
-
-> **Почему `-i` (interactive) а не `-it`?**  
-> Флаг `-t` (pseudo-TTY) добавляет управляющие последовательности терминала, которые могут нарушить JSON-RPC протокол. Флаг `-i` (interactive) оставляет stdin открытым без выделения TTY — это правильный режим для MCP STDIO транспорта.
+> Не добавляйте флаг `-t`: псевдотерминал может добавить управляющие последовательности и нарушить STDIO-транспорт MCP.
 
 ### Переменные окружения в Docker
 
-Все переменные передаются через `--env-file .env` или `environment` в `docker-compose.yml`:
+Основные переменные передаются через `--env-file .env` или `env_file` в `docker-compose.yml`:
 
 | Переменная | Обязательна | Описание |
 |------------|-------------|----------|
@@ -347,29 +326,11 @@ docker run -i --rm \
 | `JIRA_EMAIL` | да | E-mail пользователя для Basic-аутентификации |
 | `JIRA_TOKEN` | да | API-токен Atlassian |
 | `CONFLUENCE_URL` | нет | Базовый URL Confluence (по умолчанию `JIRA_URL/wiki`) |
-| `ATLASSIAN_LOG_LEVEL` | нет | Уровень логирования (DEBUG, INFO, WARN, ERROR), по умолчанию `INFO` |
+| `MCP_MAX_TEXT_LENGTH` | нет | Максимальная длина текстового поля (по умолчанию 4000) |
+| `MCP_MAX_RESPONSE_BYTES` | нет | Максимальный размер HTTP-ответа в байтах (по умолчанию 2097152) |
+| `ATLASSIAN_LOG_LEVEL` | нет | Уровень логирования (DEBUG, INFO, WARN, ERROR), по умолчанию INFO |
 
-### Логирование в Docker
-
-- Логи приложения (SLF4J/Logback) выводятся в **stderr** — их видно в `docker logs <container>`
-- **stdout** занят JSON-RPC протоколом — не перенаправляйте его в файлы логов
-- `docker-compose.yml` настроен с `json-file` драйвером для stderr
-
-### Полезные команды
-
-```bash
-# Просмотр логов (stderr — логи приложения)
-docker logs -f atlassian-mcp-server
-
-# Остановка и удаление контейнера
-docker compose down
-
-# Пересборка при изменении кода
-docker compose up --build --force-recreate
-
-# Запуск тестов внутри контейнера (опционально)
-docker run --rm atlassian-mcp-server ./mvnw test
-```
+Логи приложения выводятся в `stderr`. Не перенаправляйте `stdout` в файл логов: он зарезервирован для JSON-RPC.
 
 ---
 
@@ -412,7 +373,7 @@ atlassian-mcp-server/
 │       └── test/java/              # тесты Confluence
 └── atlassian-mcp-app/              # приложение и точка сборки
     └── src/
-        ├── main/java/              # AtlassianMcpServer и ToolRegistrar
+        ├── main/java/              # AtlassianMcpServer и McpToolInitializer
         └── test/java/              # интеграционные тесты MCP-регистрации
 ```
 
