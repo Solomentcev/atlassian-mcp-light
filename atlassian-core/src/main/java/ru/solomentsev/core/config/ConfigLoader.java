@@ -12,6 +12,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +43,9 @@ public final class ConfigLoader {
 
     /** Логгер загрузчика конфигурации. */
     private static final Logger log = LoggerFactory.getLogger(ConfigLoader.class);
+
+    /** Шаблон ссылки на переменную окружения в application.properties. */
+    private static final Pattern ENV_PLACEHOLDER = Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_]*)(?::([^}]*))?}");
 
     /** Ключ свойства JVM с базовым URL Jira. */
     private static final String SYS_JIRA_URL = "jira.url";
@@ -133,10 +138,8 @@ public final class ConfigLoader {
                 explicitPath(environment, systemProperties, PROPERTIES_FILE_PATH, SYS_PROPERTIES_FILE_PATH),
                 DEFAULT_PROPERTIES_FILE_NAME);
 
-        Map<String, String> propertiesValues = readPropertiesFile(propertiesFile);
-        if (propertiesValues.isEmpty()) {
-            propertiesValues = readClasspathProperties();
-        }
+        Map<String, String> propertiesValues = new LinkedHashMap<>(readClasspathProperties());
+        propertiesValues.putAll(readPropertiesFile(propertiesFile));
 
         log.debug("Файл конфигурации {}: {}", DEFAULT_ENV_FILE_NAME, envFile);
         log.debug("Файл конфигурации {}: {}", DEFAULT_PROPERTIES_FILE_NAME, propertiesFile);
@@ -213,18 +216,52 @@ public final class ConfigLoader {
             log.debug("Параметр {} взят из файла {}", systemKey, DEFAULT_ENV_FILE_NAME);
             return value;
         }
-        value = trimToNull(propertiesValues.get(systemKey));
-        if (value != null) {
-            log.debug("Параметр {} взят из файла {}", systemKey, DEFAULT_PROPERTIES_FILE_NAME);
-            return value;
+        value = resolvePropertyValue(propertiesValues.get(systemKey));
+        if (value == null) {
+            value = resolvePropertyValue(propertiesValues.get(envKey));
         }
-        value = trimToNull(propertiesValues.get(envKey));
         if (value != null) {
             log.debug("Параметр {} взят из файла {}", systemKey, DEFAULT_PROPERTIES_FILE_NAME);
             return value;
         }
         log.debug("Параметр {} не задан ни в одном источнике", systemKey);
         return null;
+    }
+
+    /**
+     * Разрешает ссылки на переменные окружения в значении application.properties.
+     *
+     * <p>Поддерживаются формы {@code ${NAME}} и {@code ${NAME:default}}.
+     * Сначала проверяется реальное окружение, затем значения из {@code .env};
+     * значение после двоеточия используется только при отсутствии обоих источников.</p>
+     *
+     * @param propertyValue исходное значение свойства
+     * @return разрешённое значение или null, если обязательная ссылка не найдена
+     */
+    private String resolvePropertyValue(String propertyValue) {
+        String value = trimToNull(propertyValue);
+        if (value == null) {
+            return null;
+        }
+
+        Matcher matcher = ENV_PLACEHOLDER.matcher(value);
+        StringBuffer resolved = new StringBuffer();
+        while (matcher.find()) {
+            String variableName = matcher.group(1);
+            String replacement = trimToNull(environment.get(variableName));
+            if (replacement == null) {
+                replacement = trimToNull(envFileValues.get(variableName));
+            }
+            if (replacement == null) {
+                replacement = trimToNull(matcher.group(2));
+            }
+            if (replacement == null) {
+                return null;
+            }
+            matcher.appendReplacement(resolved, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(resolved);
+        return trimToNull(resolved.toString());
     }
 
     /**
