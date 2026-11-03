@@ -138,7 +138,7 @@ public class McpProtocol {
     }
 
     private JsonNode serverNotInitialized(JsonNode id) {
-        return errorResponse(id, -32002, "Server not initialized");
+        return errorResponse(id, -32001, "Server not initialized");
     }
 
     private static boolean isValidImplementation(JsonNode implementation) {
