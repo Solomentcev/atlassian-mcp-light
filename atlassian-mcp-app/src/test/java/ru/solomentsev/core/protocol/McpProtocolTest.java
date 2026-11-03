@@ -503,7 +503,7 @@ public class McpProtocolTest {
         JsonNode result = statelessProtocol.processRequest(request).get("result");
 
         assertEquals("complete", result.get("resultType").asText());
-        assertFalse(result.get("isError").asBoolean());
+        assertFalse(result.path("isError").asBoolean());
         assertEquals("ok", result.get("content").get(0).get("text").asText());
     }
 
