@@ -15,7 +15,9 @@ import ru.solomentsev.core.config.AppConfig;
 import ru.solomentsev.core.config.ConfigLoader;
 import ru.solomentsev.core.protocol.McpProtocol;
 import ru.solomentsev.confluence.service.ConfluenceService;
+import ru.solomentsev.confluence.tools.ConfluenceToolProvider;
 import ru.solomentsev.jira.service.JiraService;
+import ru.solomentsev.jira.tools.JiraToolProvider;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -25,6 +27,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * Точка входа MCP-сервера для Jira и Confluence.
@@ -72,7 +75,9 @@ public class AtlassianMcpServer {
         McpProtocol protocol = new McpProtocol();
 
         // 5. Регистрация инструментов (OCP: расширение без изменения протокола)
-        McpToolInitializer.initialize(protocol, jiraService, confluenceService);
+        McpToolInitializer.initialize(protocol, List.of(
+                new JiraToolProvider(jiraService),
+                new ConfluenceToolProvider(confluenceService)));
 
         log.info("atlassian-mcp-server запущен: Jira={}, Confluence={}",
                 config.getJiraUrl(), config.resolveConfluenceUrl());
