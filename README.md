@@ -1,417 +1,176 @@
 # atlassian-mcp-server
 
-Лёгкий MCP-сервер на Java, дающий AI-агентам (Claude, Cline, Cursor и др.) доступ к **Jira** и **Confluence** через REST API.
-
-Сервер работает по протоколу **MCP (JSON-RPC 2.0)** через `stdin`/`stdout` и предоставляет 13 готовых инструментов: чтение и поиск задач, комментарии, переводы между статусами, а также чтение, поиск, создание и обновление страниц Confluence.
-
----
+MCP-сервер на Java для работы AI-агентов с Jira и Confluence через REST API. Обмен сообщениями выполняется по MCP (JSON-RPC 2.0) через STDIO.
 
 ## Возможности
 
-| Инструмент               | Описание                                                       | Обязательные параметры                                      |
-|--------------------------|----------------------------------------------------------------|-------------------------------------------------------------|
-| `jira_get_issue`         | Краткая информация о задаче (заголовок, статус, тип, описание) | `issue_key`                                                 |
-| `jira_search`            | Поиск задач по JQL                                             | `jql` (опц. `limit`, по умолчанию 5)                        |
-| `jira_create_issue`      | Создание задачи/бага                                           | `project_key`, `summary`, `description` (опц. `issue_type`) |
-| `jira_transition`        | Перевод задачи в другой статус                                 | `issue_key`, `transition_name`                              |
-| `jira_add_comment`       | Добавление комментария к задаче                                | `issue_key`, `comment`                                      |
-| `jira_get_project`       | Информация о проекте                                           | `project_key`                                               |
-| `jira_get_user`          | Информация о пользователе                                      | `user_identifier`                                           |
-| `confluence_get_page`    | Чтение страницы по ID                                          | `page_id`                                                   |
-| `confluence_list_spaces` | Список пространств                                             | — (опц. `limit`, по умолчанию 25)                           |
-| `confluence_get_space`   | Информация о пространстве                                      | `space_key`                                                 |
-| `confluence_search`      | Поиск страниц по CQL                                           | `cql` (опц. `limit`, по умолчанию 5)                        |
-| `confluence_create_page` | Создание страницы                                              | `space_key`, `title`, `content` (опц. `parent_id`)          |
-| `confluence_update_page` | Обновление страницы (версия определяется автоматически)        | `page_id` (опц. `title`, `content`)                         |
+### Jira
 
-Аргументы инструментов проверяются сервером по опубликованным JSON-схемам: строки должны быть непустыми, числовые значения — целыми, неизвестные параметры отклоняются. Для параметров `limit` допустим диапазон от 1 до 100; для `version` — положительное целое число. Некорректные аргументы возвращаются как ошибка вызова инструмента (`isError: true`), без обращения к Atlassian API.
-Инструменты также публикуют MCP-аннотации `readOnlyHint`, `destructiveHint`, `idempotentHint` и `openWorldHint`. Это описательные подсказки для MCP-клиента, а не механизм авторизации или ограничения доступа.
+| Инструмент | Назначение |
+|---|---|
+| `jira_get_issue` | Получить задачу по ключу |
+| `jira_search` | Найти задачи по JQL |
+| `jira_create_issue` | Создать задачу |
+| `jira_transition` | Перевести задачу в другой статус |
+| `jira_add_comment` | Добавить комментарий |
+| `jira_get_project` | Получить информацию о проекте |
+| `jira_get_user` | Найти пользователя |
 
-JSON-RPC запросы проверяются на версию `2.0`, строковый метод, объект `params` и допустимый тип `id`. Только отсутствие поля `id` обозначает уведомление; `id: null` считается некорректным запросом. Ошибка синтаксиса JSON возвращается как `-32700 Parse error`, а корректный JSON с неверной структурой — как `-32600 Invalid Request`.
+### Confluence
 
----
+| Инструмент | Назначение |
+|---|---|
+| `confluence_get_page` | Получить страницу по ID |
+| `confluence_list_spaces` | Получить список пространств |
+| `confluence_get_space` | Получить информацию о пространстве |
+| `confluence_search` | Найти страницы по CQL |
+| `confluence_create_page` | Создать страницу |
+| `confluence_update_page` | Обновить страницу |
+
+Параметры инструментов и их обязательность MCP-клиент получает через JSON-схемы. Для `limit` допустимы значения от 1 до 100. При обновлении страницы Confluence можно передать `title`, `content` и `version`; если версия не указана, сервер определяет её автоматически. Содержимое страниц передаётся в формате Confluence Storage.
 
 ## Требования
 
-- **Java 17+** (проверено на Java 25)
-- **Maven 3.8+**
-- Учётная запись Atlassian с доступом к Jira и/или Confluence
+- Java 17 или новее.
+- Учётная запись Atlassian с доступом к нужным проектам Jira и пространствам Confluence.
+- Maven Wrapper включён в репозиторий; отдельно устанавливать Maven для сборки не требуется.
 
-Внешние HTTP-библиотеки не требуются: запросы выполняются штатным `java.net.http.HttpClient` из JDK. Зависимости: Jackson Databind для работы с JSON, SLF4J + Logback для логирования.
-
----
+Права учётной записи Atlassian должны разрешать операции, которые планируется выполнять: просмотр, поиск, создание и изменение задач или страниц.
 
 ## Конфигурация
 
-### Параметры
+Для подключения необходимы следующие параметры:
 
-| Переменная       | Обязательна | Описание                                                                |
-|------------------|-------------|-------------------------------------------------------------------------|
-| `JIRA_URL`       | да          | Базовый URL Jira, например `https://your-company.atlassian.net`         |
-| `JIRA_EMAIL`     | да          | E-mail пользователя (только для Basic-аутентификации)                   |
-| `JIRA_TOKEN`     | да          | API-токен Atlassian (Cloud) или Personal Access Token (Server/DC)       |
-| `CONFLUENCE_URL` | нет         | Базовый URL Confluence. Если не задан — используется `JIRA_URL + /wiki` |
-| `MCP_MAX_TEXT_LENGTH` | нет | Количество сохраняемых символов в одном текстовом поле до маркера `...` (по умолчанию 4000; диапазон 1–1000000) |
-| `MCP_MAX_RESPONSE_BYTES` | нет | Максимальный размер тела одного HTTP-ответа (по умолчанию 2097152 байта; диапазон 1–104857600) |
+| Переменная | Обязательна | Назначение |
+|---|---:|---|
+| `JIRA_URL` | Да | Базовый HTTPS URL Jira, например `https://company.atlassian.net` |
+| `JIRA_EMAIL` | Да | E-mail пользователя Atlassian |
+| `JIRA_TOKEN` | Да | API-токен Atlassian |
+| `CONFLUENCE_URL` | Нет | Базовый URL Confluence. По умолчанию используется `JIRA_URL/wiki` |
+| `MCP_MAX_TEXT_LENGTH` | Нет | Максимальная длина текстового поля в ответе MCP. По умолчанию 4000 символов |
+| `MCP_MAX_RESPONSE_BYTES` | Нет | Максимальный размер HTTP-ответа. По умолчанию 2097152 байта |
+| `ATLASSIAN_LOG_LEVEL` | Нет | Уровень логирования: `DEBUG`, `INFO`, `WARN` или `ERROR`. По умолчанию `INFO` |
 
-> **Важно:** секреты не должны попадать в репозиторий. Используйте переменные окружения, файл `.env` или `application.properties` (оба в `.gitignore`).
+Сервер использует HTTP Basic-аутентификацию с парой `JIRA_EMAIL:JIRA_TOKEN`. Для Atlassian Cloud создайте API-токен в [настройках безопасности Atlassian](https://id.atlassian.com/manage-profile/security/api-tokens). Bearer-аутентификация с Personal Access Token не реализована.
 
-Получение API-токена Atlassian Cloud: `https://id.atlassian.com/manage-profile/security/api-tokens`.
-
-### Источники конфигурации
-
-Конфигурация собирается из нескольких источников. Значение берётся из первого источника, где оно задано и не пустое (пустая переменная окружения считается незаданной и не перекрывает следующий источник):
-
-| Приоритет | Источник                        | Ключи                                                    |
-|-----------|---------------------------------|----------------------------------------------------------|
-| 1         | Свойства JVM (`-Djira.url=...`) | `jira.url`, `jira.email`, `jira.token`, `confluence.url`, `mcp.max-text-length`, `mcp.max-response-bytes` |
-| 2         | Переменные окружения            | `JIRA_URL`, `JIRA_EMAIL`, `JIRA_TOKEN`, `CONFLUENCE_URL`, `MCP_MAX_TEXT_LENGTH`, `MCP_MAX_RESPONSE_BYTES` |
-| 3         | Файл `.env`                     | `JIRA_URL=...` (формат dotenv)                           |
-| 4         | Файл `application.properties`   | `jira.url=...` (допустимы и `JIRA_URL=...`)              |
-
-#### Файл `.env`
+Параметры можно задать переменными окружения или в файле `.env`:
 
 ```dotenv
-# комментарий
-JIRA_URL=https://your-company.atlassian.net
+JIRA_URL=https://company.atlassian.net
 JIRA_EMAIL=user@company.com
 JIRA_TOKEN=your-api-token
-# CONFLUENCE_URL=https://your-company.atlassian.net/wiki
+# CONFLUENCE_URL=https://company.atlassian.net/wiki
 ```
 
-#### Файл `application.properties`
+Также поддерживается файл `application.properties`:
 
 ```properties
-jira.url=https://your-company.atlassian.net
+jira.url=https://company.atlassian.net
 jira.email=user@company.com
 jira.token=your-api-token
-# confluence.url=https://your-company.atlassian.net/wiki
-# mcp.max-text-length=4000
-# mcp.max-response-bytes=2097152
+# confluence.url=https://company.atlassian.net/wiki
 ```
 
-#### Где ищутся файлы
+Источники настроек применяются в таком порядке: свойства JVM, переменные окружения, файл `.env`, файл `application.properties`. Путь к файлу можно задать через `ATLASSIAN_ENV_FILE` или `ATLASSIAN_PROPERTIES_FILE` (либо соответствующие свойства JVM `atlassian.env.file` и `atlassian.properties.file`). Без явно заданного пути файлы ищутся в рабочем каталоге и рядом с JAR; для `application.properties` дополнительно проверяется classpath. Поэтому файл настроек можно разместить рядом с JAR-файлом, если рабочий каталог MCP-клиента неизвестен.
 
-1. Явно заданный путь: переменная окружения `ATLASSIAN_ENV_FILE` / `ATLASSIAN_PROPERTIES_FILE` (либо свойство JVM `-Datlassian.env.file=...` / `-Datlassian.properties.file=...`).
-2. Текущий рабочий каталог.
-3. Каталог рядом с jar-файлом — самый надёжный вариант для MCP-клиентов, у которых рабочий каталог непредсказуем.
-4. Для `application.properties` дополнительно проверяется classpath (внутри jar-файла).
+**Важно:** `JIRA_URL`, `JIRA_EMAIL` и `JIRA_TOKEN` обязательны даже при использовании только инструментов Confluence. Для Atlassian Server/Data Center укажите отдельный `CONFLUENCE_URL`, если адрес Confluence не соответствует `JIRA_URL/wiki`.
 
-Отсутствие файла не является ошибкой. Нечитаемый файл или несуществующий явно заданный путь приводят к предупреждению в `stderr` (в `stdout` идёт JSON-RPC) и к продолжению работы со следующими источниками.
+Не добавляйте файлы с токенами в Git и не передавайте секреты в публичные логи.
 
----
+## Сборка и запуск
 
-## Сборка
+Из корня репозитория выполните:
 
 ```bash
-mvn clean package
+./mvnw clean package
 ```
 
-В `atlassian-mcp-app/target/` появится самодостаточный uber-jar со всеми зависимостями:
+После сборки исполняемый файл будет находиться здесь:
 
 ```
 atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 ```
 
-Полезные цели:
+Задайте параметры подключения и запустите сервер:
 
 ```bash
-mvn test                       # только тесты
-mvn clean package -DskipTests  # сборка без тестов
-```
-
----
-
-## Запуск
-
-```bash
-export JIRA_URL="https://your-company.atlassian.net"
+export JIRA_URL="https://company.atlassian.net"
 export JIRA_EMAIL="user@company.com"
 export JIRA_TOKEN="your-api-token"
 
 java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 ```
 
-Сервер ожидает JSON-RPC сообщения в `stdin` и отвечает в `stdout` (по одному JSON-объекту на строку). Проверить вручную можно последовательностью инициализации и запросом списка инструментов:
+Сервер читает запросы из `stdin` и записывает ответы JSON-RPC в `stdout`. Логи выводятся только в `stderr`. Не направляйте в `stdout` посторонний текст — это нарушит обмен с MCP-клиентом.
 
-```bash
-java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar <<'EOF'
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"manual-client","version":"1.0.0"}}}
-{"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":2,"method":"tools/list"}
-EOF
-```
+## Подключение MCP-клиента
 
-Сервер вернёт ответ на `initialize` и затем на `tools/list`. Уведомление `notifications/initialized` подтверждает завершение рукопожатия и не порождает ответ.
-
----
-
-## Подключение к MCP-клиенту
-
-### Claude Desktop (`claude_desktop_config.json`)
+Добавьте сервер в MCP-конфигурацию клиента. Ниже общий пример STDIO-конфигурации; синтаксис и расположение файла настроек зависят от конкретного клиента:
 
 ```json
 {
   "mcpServers": {
     "atlassian": {
       "command": "java",
-      "args": ["-jar", "/полный/путь/atlassian-mcp-server/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"],
-      "env": {
-        "JIRA_URL": "https://your-company.atlassian.net",
-        "JIRA_EMAIL": "user@company.com",
-        "JIRA_TOKEN": "your-api-token"
-      }
-    }
-  }
-}
-```
-
-### Cline / Cursor / другие клиенты
-
-Аналогично: указываем `command: java`, в `args` — путь к jar-файлу, в `env` — переменные окружения. Для VS Code (`.vscode/mcp.json`):
-
-```json
-{
-  "servers": {
-    "atlassian": {
-      "type": "stdio",
-      "command": "java",
-      "args": ["-jar", "/полный/путь/atlassian-mcp-server/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"],
-      "env": {
-        "JIRA_URL": "https://your-company.atlassian.net",
-        "JIRA_EMAIL": "user@company.com",
-        "JIRA_TOKEN": "your-api-token"
-      }
-    }
-  }
-}
-```
-
-#### Cline CLI и плагин Cline для IDE
-
-Cline CLI и плагин Cline для IntelliJ IDEA читают MCP-конфиг из `~/.cline/data/settings/cline_mcp_settings.json`.
-Секреты удобно оставить в `.env` проекта, а в конфиге указать только путь к нему:
-
-```json
-{
-  "mcpServers": {
-    "atlassian-local": {
-      "type": "stdio",
-      "command": "/usr/bin/java",
       "args": [
         "-jar",
-        "/полный/путь/atlassian-mcp-server/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"
+        "/absolute/path/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"
       ],
       "env": {
-        "ATLASSIAN_ENV_FILE": "/полный/путь/atlassian-mcp-server/.env",
-        "ATLASSIAN_LOG_LEVEL": "INFO"
-      },
-      "disabled": false,
-      "autoApprove": [],
-      "timeout": 60
+        "JIRA_URL": "https://company.atlassian.net",
+        "JIRA_EMAIL": "user@company.com",
+        "JIRA_TOKEN": "your-api-token"
+      }
     }
   }
 }
 ```
 
-Cline перечитывает конфиг автоматически и перезапускает процесс сервера, поэтому после пересборки jar достаточно
-сохранить файл конфигурации. Инструменты будут доступны как `mcp__atlassian-local__jira_search` и т. п.
+Замените путь и значения параметров на свои. Вместо передачи секретов в конфигурации клиента можно указать путь к файлу настроек через `ATLASSIAN_ENV_FILE` или `ATLASSIAN_PROPERTIES_FILE`.
 
-### Конфигурация без переменных окружения
+## Docker
 
-Если секреты не хочется держать в конфиге клиента, положите рядом с jar-файлом `application.properties` (или `.env`) — сервер найдёт их автоматически:
+Сначала создайте в корне проекта файл `.env` с обязательными параметрами из раздела «Конфигурация». Файл нужен и Docker Compose, поскольку он указан в `env_file`.
 
-```
-target/
-├── atlassian-mcp-server-1.0-SNAPSHOT.jar
-└── application.properties   # jira.url=..., jira.email=..., jira.token=...
-```
-
-Тогда блок `env` в конфиге клиента не нужен. Путь к файлу можно задать и явно: `"env": {"ATLASSIAN_PROPERTIES_FILE": "/путь/к/application.properties"}`.
-
----
-
-## Логирование
-
-Логи пишутся через SLF4J + Logback **только в `stderr`**. Поток `stdout` полностью занят протоколом JSON-RPC: любой посторонний вывод в него ломает разбор ответов MCP-клиентом. Это обеспечивается конфигурацией `atlassian-core/src/main/resources/logback.xml` (`<target>System.err</target>`).
-
-Уровень логирования задаётся переменной окружения `ATLASSIAN_LOG_LEVEL`:
-
-| Уровень    | Что попадает в лог                                                                 |
-|------------|-------------------------------------------------------------------------------------|
-| `DEBUG`    | Источники конфигурации, HTTP-запросы, имена инструментов и ключи их аргументов       |
-| `INFO`     | Запуск/остановка сервера, входящие MCP-запросы, HTTP-статусы и длительность запросов  |
-| `WARN`     | Проблемы с файлами конфигурации                                                     |
-| `ERROR`    | Ошибки HTTP и вызова инструментов с traceback                                       |
-
-Значение по умолчанию — `INFO`. Пример запуска с подробным логом:
+Сборка образа:
 
 ```bash
-ATLASSIAN_LOG_LEVEL=DEBUG java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
-```
-
-Пример вывода в `stderr`:
-
-```
-12:47:21.264 DEBUG [main] ru.solomentsev.core.config.ConfigLoader - Параметр jira.url взят из файла .env
-12:47:21.370 INFO  [main] ru.solomentsev.core.protocol.McpProtocol - Запрос: method=tools/call, id=3
-12:47:21.377 DEBUG [main] ru.solomentsev.core.protocol.McpProtocol - Вызов инструмента: jira_search (аргументы: [jql, limit])
-12:47:21.378 DEBUG [main] ru.solomentsev.core.client.JdkHttpClient - HTTP-запрос: POST /rest/api/3/search/jql
-12:47:22.434 INFO  [main] ru.solomentsev.core.client.JdkHttpClient - HTTP-ответ: POST /rest/api/3/search/jql -> 200 (1055 мс)
-```
-
-**Что никогда не попадает в логи:** API-токен, заголовок `Authorization`, значения аргументов инструментов, тела запросов и query-строка URL (в лог пишется только путь). Имена аргументов логируются — значения нет.
-
----
-
-## Запуск в Docker
-
-Проект включает `Dockerfile` (multi-stage сборка) и `docker-compose.yml` для запуска MCP-сервера через STDIO.
-
-MCP-сервер не является фоновым HTTP-сервисом: MCP-клиент должен запускать его как дочерний процесс и обмениваться сообщениями через `stdin/stdout`. Поэтому не используйте `docker compose up -d` и не запускайте контейнер с TTY.
-
-### Сборка образа
-
-Создайте файл `.env` на основе примера и укажите учётные данные:
-
-```bash
-cp .env.example .env
 docker compose build
 ```
 
-### Запуск через Docker Compose
-
-Из каталога проекта выполните:
+Запуск MCP-сервера:
 
 ```bash
 docker compose run --rm -i atlassian-mcp-server
 ```
 
-Команда запускает контейнер в интерактивном режиме без псевдотерминала. `stdin` остаётся открытым, `stdout` используется только для JSON-RPC, диагностические сообщения выводятся в `stderr`.
-
-### Запуск напрямую через Docker
-
-```bash
-docker build -t atlassian-mcp-server .
-docker run -i --rm --env-file .env atlassian-mcp-server
-```
-
-**Пример конфигурации для Claude Desktop (`claude_desktop_config.json`):**
-
-```json
-{
-  "mcpServers": {
-    "atlassian": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "--env-file", "/полный/путь/к/.env",
-        "atlassian-mcp-server"
-      ]
-    }
-  }
-}
-```
-
-Для Cline, Cursor и других MCP-клиентов используется аналогичная конфигурация с `docker run -i --rm`.
-
-> Не добавляйте флаг `-t`: псевдотерминал может добавить управляющие последовательности и нарушить STDIO-транспорт MCP.
-
-### Переменные окружения в Docker
-
-Основные переменные передаются через `--env-file .env` или `env_file` в `docker-compose.yml`:
-
-| Переменная | Обязательна | Описание |
-|------------|-------------|----------|
-| `JIRA_URL` | да | Базовый URL Jira (`https://your-company.atlassian.net`) |
-| `JIRA_EMAIL` | да | E-mail пользователя для Basic-аутентификации |
-| `JIRA_TOKEN` | да | API-токен Atlassian |
-| `CONFLUENCE_URL` | нет | Базовый URL Confluence (по умолчанию `JIRA_URL/wiki`) |
-| `MCP_MAX_TEXT_LENGTH` | нет | Максимальная длина текстового поля (по умолчанию 4000) |
-| `MCP_MAX_RESPONSE_BYTES` | нет | Максимальный размер HTTP-ответа в байтах (по умолчанию 2097152) |
-| `ATLASSIAN_LOG_LEVEL` | нет | Уровень логирования (DEBUG, INFO, WARN, ERROR), по умолчанию INFO |
-
-Логи приложения выводятся в `stderr`. Не перенаправляйте `stdout` в файл логов: он зарезервирован для JSON-RPC.
-
----
-
-## Поддерживаемые методы протокола
-
-| Метод        | Назначение                                               |
-|--------------|----------------------------------------------------------|
-| `initialize` | Начало рукопожатия, согласование версии и возможностей   |
-| `notifications/initialized` | Подтверждение завершения инициализации клиентом |
-| `tools/list` | Список инструментов с JSON-схемами аргументов            |
-| `tools/call` | Вызов инструмента: `{"name": "...", "arguments": {...}}` |
-| `ping`       | Проверка живости соединения, пустой результат            |
-
-Для вызова `tools/list` и `tools/call` сначала необходимо выполнить `initialize`, а затем отправить
-уведомление `notifications/initialized`. До получения этого уведомления сервер разрешает только `ping`;
-обычные запросы отклоняются с ошибкой `-32001 Server not initialized`.
-
-Уведомления (запросы без `id`, включая `notifications/initialized`) не порождают ответа — это требование JSON-RPC 2.0.
-
-Ошибки выполнения возвращаются в поле `result.isError` с текстом в `result.content[0].text`, поэтому агент может их показать пользователю.
+Сервер использует STDIO, поэтому контейнер должен работать в интерактивном режиме без псевдотерминала. Не используйте `docker compose up -d` или флаг Docker `-t`: MCP-клиент должен обмениваться данными с процессом через `stdin/stdout`.
 
 ## Структура проекта
 
-Проект разделён на четыре Maven-модуля:
+Проект состоит из четырёх Maven-модулей:
 
-```
-atlassian-mcp-server/
-├── pom.xml                         # родительский POM и агрегатор модулей
-├── atlassian-core/                 # общая инфраструктура
-│   └── src/
-│       ├── main/java/              # HTTP-клиент, конфигурация, MCP-протокол
-│       ├── main/resources/         # logback.xml
-│       └── test/java/              # тесты общей инфраструктуры
-├── atlassian-jira/                 # интеграция с Jira
-│   └── src/
-│       ├── main/java/              # JiraService и JiraToolProvider
-│       └── test/java/              # тесты Jira
-├── atlassian-confluence/           # интеграция с Confluence
-│   └── src/
-│       ├── main/java/              # ConfluenceService и ConfluenceToolProvider
-│       └── test/java/              # тесты Confluence
-└── atlassian-mcp-app/              # приложение и точка сборки
-    └── src/
-        ├── main/java/              # AtlassianMcpServer и McpToolInitializer
-        └── test/java/              # интеграционные тесты MCP-регистрации
+| Модуль | Назначение |
+|---|---|
+| `atlassian-core` | MCP-протокол, конфигурация, HTTP-клиент и общая инфраструктура |
+| `atlassian-jira` | Интеграция с Jira |
+| `atlassian-confluence` | Интеграция с Confluence |
+| `atlassian-mcp-app` | Точка входа и сборка приложения |
+
+Модули Jira и Confluence используют общее ядро и не зависят друг от друга.
+
+## Разработка
+
+Сборка проекта:
+
+```bash
+./mvnw clean package
 ```
 
-Зависимости направлены от продуктовых модулей к общему ядру:
+Запуск тестов:
 
-- `atlassian-jira` → `atlassian-core`;
-- `atlassian-confluence` → `atlassian-core`;
-- `atlassian-mcp-app` → `atlassian-core`, `atlassian-jira`, `atlassian-confluence`.
+```bash
+./mvnw test
+```
 
-Модули Jira и Confluence не зависят друг от друга. Общий интерфейс `ToolProvider`
-позволяет подключать новые продуктовые интеграции без изменений MCP-протокола.
-
-Юнит-тесты расположены в `src/test` соответствующих модулей. Отдельный тестовый Maven-модуль не используется.
-
----
-
-## Технические детали и ограничения
-
-- **Версия протокола:** `2024-11-05`.
-- **Аутентификация:** HTTP Basic (`email:token`). Поддерживается только базовая аутентификация — OAuth 2.0 не реализован.
-- **REST API:** Jira — `rest/api/2`, Confluence — `rest/api` (v1). Для Confluence Cloud v1 с `?expand=body.storage` работает корректно; при необходимости смены версии API достаточно править URL в коде.
-- **Jira Cloud — поиск задач:** эндпоинт `/rest/api/2/search` в облаке удалён (HTTP 410), поэтому поиск выполняется через `POST /rest/api/3/search/jql` с телом `{"jql": "...", "maxResults": N, "fields": [...]}`. Новый эндпоинт отклоняет неограниченные запросы (например, `ORDER BY created DESC` без условий) с HTTP 400 — в этом случае сервер сам ограничивает запрос последними 30 днями (`created >= -30d`), а запрос с уже заданными условиями фильтрации не изменяется.
-- **Пагинация поиска:** Jira продолжает поиск по `nextPageToken`, а Confluence использует `start` и `_links.next`. Результаты объединяются до достижения запрошенного `limit`; повторяющийся токен Jira останавливает запрос с ошибкой, а Confluence не использует URL следующей страницы напрямую.
-- **Jira Cloud — пользователи:** параметр `username` у `/rest/api/2/user` удалён (требуется `accountId`). Поиск пользователя выполняется через `/rest/api/2/user/search?query=...` (совпадение по e-mail, имени или username), а если передан `accountId` — прямой запрос `/rest/api/2/user?accountId=...`.
-- **Структура payload Confluence** (по OpenAPI-спецификации Atlassian v1): `title` — обычная строка, `space` передаётся как `{"key": "..."}` и обязателен при создании, `body.storage.representation` — всегда `"storage"` (допустимые значения: `storage`, `atlas_doc_format`, `view`, `wiki`, `raw` и др.; `"html"` в enum отсутствует и приводит к `400 Bad Request`).
-- **Идентификатор Confluence:** используется числовой `id` страницы (не `pageId` в формате «pageId/12345»).
-- **Ограничение контекста:** длинные текстовые поля Jira и Confluence сохраняют не более `MCP_MAX_TEXT_LENGTH` символов (по умолчанию 4000), после чего добавляется маркер `...`; JSON формируется после сокращения полей и остаётся валидным.
-- **Безопасность URL:** Jira и Confluence должны быть доступны по HTTPS. URL с `http`, user-info, query или fragment отклоняются, чтобы не отправлять Basic Auth по незашифрованному соединению и не допускать неоднозначную сборку REST URL.
-- **Ограничение HTTP-ответов:** тело каждого ответа Atlassian читается потоково и ограничивается `MCP_MAX_RESPONSE_BYTES` (по умолчанию 2 МиБ). Превышение лимита приводит к ошибке инструмента без загрузки всего тела в память.
-- **Потокобезопасность:** сервер обрабатывает запросы последовательно, по одному JSON-объекту на строку.
-- **Логирование:** SLF4J + Logback, вывод только в `stderr`, уровень — `ATLASSIAN_LOG_LEVEL` (по умолчанию `INFO`); см. раздел «Логирование».
-- **Сборка:** `maven-shade-plugin` собирает uber-jar; `dependency-reduced-pom.xml` не создаётся (`createDependencyReducedPom=false`).
-
----
-
-## Лицензия
-
-Свободное использование в личных и коммерческих целях.
-
+Тесты находятся в `src/test` соответствующих Maven-модулей.
