@@ -17,7 +17,8 @@ import java.util.Objects;
 /**
  * Обрабатывает JSON-RPC 2.0 запросы протокола MCP.
  *
- * <p>Поддерживает методы initialize, tools/list, tools/call и ping,
+ * <p>Поддерживает жизненный цикл MCP с методами initialize и
+ * notifications/initialized, методы tools/list, tools/call и ping,
  * а также проверяет структуру запросов и аргументы инструментов.</p>
  */
 public class McpProtocol {
