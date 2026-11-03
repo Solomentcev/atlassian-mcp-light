@@ -11,7 +11,6 @@ import ru.solomentsev.core.client.HttpClientFactory;
 import ru.solomentsev.core.config.AppConfig;
 import ru.solomentsev.core.config.ConfigLoader;
 import ru.solomentsev.core.protocol.McpProtocol;
-import ru.solomentsev.core.protocol.ToolRegistrar;
 import ru.solomentsev.confluence.service.ConfluenceService;
 import ru.solomentsev.jira.service.JiraService;
 
