@@ -55,9 +55,20 @@ public class McpProtocolTest {
         return request;
     }
 
+    private ObjectNode initializeRequest(String protocolVersion) {
+        ObjectNode request = request("initialize");
+        ObjectNode params = request.putObject("params");
+        params.put("protocolVersion", protocolVersion);
+        params.putObject("capabilities");
+        ObjectNode clientInfo = params.putObject("clientInfo");
+        clientInfo.put("name", "test-client");
+        clientInfo.put("version", "1.0.0");
+        return request;
+    }
+
     @Test
     public void initializeReturnsProtocolVersionAndServerInfo() throws IOException {
-        JsonNode response = protocol.processRequest(request("initialize"));
+        JsonNode response = protocol.processRequest(initializeRequest("2024-11-05"));
 
         JsonNode result = response.get("result");
         assertNotNull(result);
@@ -66,6 +77,21 @@ public class McpProtocolTest {
         assertEquals("atlassian-lite", result.get("serverInfo").get("name").asText());
         assertEquals("1.0.0", result.get("serverInfo").get("version").asText());
         assertNotNull(result.get("capabilities").get("tools"));
+    }
+
+    @Test
+    public void initializeRejectsMissingRequiredParameters() {
+        JsonNode response = protocol.processRequest(request("initialize"));
+
+        assertNotNull(response.get("error"));
+        assertEquals(-32602, response.get("error").get("code").asInt());
+    }
+
+    @Test
+    public void initializeReturnsSupportedVersionWhenClientRequestsAnotherVersion() {
+        JsonNode response = protocol.processRequest(initializeRequest("2025-03-26"));
+
+        assertEquals("2024-11-05", response.get("result").get("protocolVersion").asText());
     }
 
     @Test
