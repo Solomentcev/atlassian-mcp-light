@@ -51,7 +51,7 @@ public final class AppConfig {
     private final int maxResponseBytes;
 
     /**
-     * Защищенный конструктор. Создает конфигурацию с заданными значениями.
+     * Приватный конструктор. Создаёт конфигурацию с заданными значениями.
      *
      * @param jiraUrl      базовый URL Jira (не null, не пустой после нормализации)
      * @param confluenceUrl базовый URL Confluence (может быть null)
@@ -81,10 +81,12 @@ public final class AppConfig {
      * <p>Метод сохранён для совместимости. Приоритет источников и загрузку файлов
      * централизованно выполняет {@link ConfigLoader}.</p>
      *
+     * @deprecated Используйте {@link ConfigLoader#fromSystem()}{@code .load()}.
      * @return загруженная и проверенная конфигурация
      * @throws IllegalStateException если обязательные параметры отсутствуют
      *                               или содержат недопустимые значения
      */
+    @Deprecated
     public static AppConfig fromEnvironment() {
         return ConfigLoader.fromSystem().load();
     }
