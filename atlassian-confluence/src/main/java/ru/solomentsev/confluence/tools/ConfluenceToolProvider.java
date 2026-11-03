@@ -49,7 +49,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                 "confluence_list_spaces",
                 "Получить список всех пространств Confluence",
                 ToolSchema.create()
-                        .optionalInteger("limit", "Максимальное количество пространств (по умолчанию 25)")
+                        .optionalInteger("limit", "Максимальное количество пространств (по умолчанию 25)", 1, 100)
                         .build(),
                 args -> confluenceService.listSpaces(args.has("limit") ? args.get("limit").asInt() : 25)));
 
@@ -66,7 +66,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                 "Поиск страниц Confluence по CQL запросу",
                 ToolSchema.create()
                         .requiredString("cql", "CQL запрос (например, space = 'TEST' AND title ~ 'документ')")
-                        .optionalInteger("limit", "Максимальное количество результатов (по умолчанию 5)")
+                        .optionalInteger("limit", "Максимальное количество результатов (по умолчанию 5)", 1, 100)
                         .build(),
                 args -> confluenceService.search(required(args, "cql"),
                         args.has("limit") ? args.get("limit").asInt() : 5)));
@@ -89,7 +89,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                 "Обновить существующую страницу Confluence",
                 ToolSchema.create()
                         .requiredString("page_id", "ID страницы Confluence")
-                        .optionalInteger("version", "Текущая версия страницы. Если не указана, определяется автоматически")
+                        .optionalInteger("version", "Текущая версия страницы. Если не указана, определяется автоматически", 1, null)
                         .optionalString("title", "Новый заголовок страницы (опционально)")
                         .optionalString("content", "Новое HTML-содержимое страницы (опционально)")
                         .build(),
