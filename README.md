@@ -132,16 +132,17 @@ export JIRA_TOKEN="your-api-token"
 java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 ```
 
-Сервер ожидает JSON-RPC сообщения в `stdin` и отвечает в `stdout` (по одному JSON-объекту на строку). Проверить вручную:
+Сервер ожидает JSON-RPC сообщения в `stdin` и отвечает в `stdout` (по одному JSON-объекту на строку). Проверить вручную можно последовательностью инициализации и запросом списка инструментов:
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
-  | java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
+java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar <<'EOF'
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"manual-client","version":"1.0.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+EOF
 ```
 
-```json
-{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"atlassian-lite","version":"1.0.0"}}}
-```
+Сервер вернёт ответ на `initialize` и затем на `tools/list`. Уведомление `notifications/initialized` подтверждает завершение рукопожатия и не порождает ответ.
 
 ---
 
@@ -338,14 +339,17 @@ docker run -i --rm --env-file .env atlassian-mcp-server
 
 | Метод        | Назначение                                               |
 |--------------|----------------------------------------------------------|
-| `initialize` | Рукопожатие, объявление доступных возможностей           |
+| `initialize` | Начало рукопожатия, согласование версии и возможностей   |
+| `notifications/initialized` | Подтверждение завершения инициализации клиентом |
 | `tools/list` | Список инструментов с JSON-схемами аргументов            |
 | `tools/call` | Вызов инструмента: `{"name": "...", "arguments": {...}}` |
 | `ping`       | Проверка живости соединения, пустой результат            |
 
-Уведомления (запросы без `id`, например `notifications/initialized`) обрабатываются, но **не порождают ответа** —
-это требование JSON-RPC 2.0, которое требуется соблюдать, иначе MCP-клиент (Cline, Claude Desktop) не сможет
-разобрать полученный кадр и разорвёт подключение.
+Для вызова `tools/list` и `tools/call` сначала необходимо выполнить `initialize`, а затем отправить
+уведомление `notifications/initialized`. До получения этого уведомления сервер разрешает только `ping`;
+обычные запросы отклоняются с ошибкой `-32001 Server not initialized`.
+
+Уведомления (запросы без `id`, включая `notifications/initialized`) не порождают ответа — это требование JSON-RPC 2.0.
 
 Ошибки выполнения возвращаются в поле `result.isError` с текстом в `result.content[0].text`, поэтому агент может их показать пользователю.
 
