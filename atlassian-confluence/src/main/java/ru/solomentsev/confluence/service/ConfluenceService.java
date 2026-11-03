@@ -146,6 +146,9 @@ public class ConfluenceService {
 
         int currentVersion;
         if (version != null) {
+            if (version < 1) {
+                throw new IllegalArgumentException("version должен быть положительным");
+            }
             currentVersion = version;
         } else {
             JsonNode currentVersionNode = currentPage.path("version").path("number");
