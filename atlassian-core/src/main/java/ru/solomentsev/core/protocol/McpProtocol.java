@@ -100,7 +100,10 @@ public class McpProtocol {
         String method = methodNode.asText();
         JsonNode metadata = params.get("_meta");
         boolean modernRequest = "server/discover".equals(method)
-                || (metadata != null && metadata.isObject() && metadata.has(META_PROTOCOL_VERSION));
+                || (metadata != null && metadata.isObject()
+                && (metadata.has(META_PROTOCOL_VERSION)
+                || metadata.has(META_CLIENT_CAPABILITIES)
+                || metadata.has(META_CLIENT_INFO)));
 
         // Уведомления никогда не получают ответ. В stateless-режиме они также
         // не меняют состояние процесса или последующих запросов.
