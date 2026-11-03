@@ -1,4 +1,4 @@
-# Сборка многомодульного atlassian-mcp-server
+# Сборка многомодульного atlassian-mcp-light
 FROM eclipse-temurin:17-jdk-alpine AS builder
 
 WORKDIR /app
@@ -29,7 +29,7 @@ RUN apk add --no-cache dumb-init \
 
 WORKDIR /app
 
-COPY --from=builder /app/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar app.jar
+COPY --from=builder /app/atlassian-mcp-app/target/atlassian-mcp-light-1.0-SNAPSHOT.jar app.jar
 
 RUN chown -R appuser:appuser /app
 USER appuser
