@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.Before;
 import org.junit.Test;
 import ru.solomentsev.core.client.FakeHttpClient;
-import ru.solomentsev.app.ToolRegistrar;
+import ru.solomentsev.app.McpToolInitializer;
 import ru.solomentsev.confluence.service.ConfluenceService;
 import ru.solomentsev.jira.service.JiraService;
 
@@ -44,7 +44,7 @@ public class McpProtocolTest {
         ConfluenceService confluenceService =
                 new ConfluenceService(httpClient, "https://company.atlassian.net/wiki");
         protocol = new McpProtocol();
-        ToolRegistrar.register(protocol, jiraService, confluenceService);
+        McpToolInitializer.initialize(protocol, jiraService, confluenceService);
     }
 
     private ObjectNode request(String method) {
