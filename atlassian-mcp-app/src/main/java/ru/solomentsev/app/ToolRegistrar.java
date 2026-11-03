@@ -1,4 +1,7 @@
 package ru.solomentsev.app;
+
+import ru.solomentsev.core.protocol.McpProtocol;
+import ru.solomentsev.core.protocol.ToolProvider;
 import ru.solomentsev.confluence.tools.ConfluenceToolProvider;
 import ru.solomentsev.jira.tools.JiraToolProvider;
 import ru.solomentsev.confluence.service.ConfluenceService;
