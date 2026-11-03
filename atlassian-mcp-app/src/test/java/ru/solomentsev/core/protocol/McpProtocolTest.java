@@ -441,6 +441,16 @@ public class McpProtocolTest {
 
 
     @Test
+    public void fractionalIdReturnsInvalidRequestError() {
+        ObjectNode request = request("ping");
+        request.put("id", 1.5);
+
+        JsonNode response = new McpProtocol().processRequest(request);
+
+        assertEquals(-32600, response.get("error").get("code").asInt());
+    }
+
+    @Test
     public void initializeNegotiatesTheLatestHandshakeVersion() {
         JsonNode response = new McpProtocol().processRequest(initializeRequest("2025-11-25"));
 
