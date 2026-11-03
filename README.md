@@ -1,6 +1,6 @@
-# atlassian-mcp-server
+# Atlassian MCP Server
 
-MCP-сервер на Java для работы AI-агентов с Jira и Confluence через REST API. Обмен сообщениями выполняется по MCP (JSON-RPC 2.0) через STDIO.
+MCP-сервер на Java для работы AI-агентов с Jira и Confluence через REST API. Транспорт — STDIO, формат сообщений — JSON-RPC 2.0.
 
 ## Возможности
 
@@ -27,82 +27,141 @@ MCP-сервер на Java для работы AI-агентов с Jira и Conf
 | `confluence_create_page` | Создать страницу |
 | `confluence_update_page` | Обновить страницу |
 
-Параметры инструментов и их обязательность MCP-клиент получает через JSON-схемы. Для `limit` допустимы значения от 1 до 100. При обновлении страницы Confluence можно передать `title`, `content` и `version`; если версия не указана, сервер определяет её автоматически. Содержимое страниц передаётся в формате Confluence Storage.
+Схемы и обязательные параметры инструментов передаются MCP-клиенту. Для параметра `limit` допустимы значения от 1 до 100. При обновлении страницы Confluence можно передать `title`, `content` и `version`; если версия не указана, сервер получает текущую версию и увеличивает её. Содержимое страницы передаётся в формате Confluence Storage.
 
 ## Требования
 
-- Java 17 или новее.
-- Учётная запись Atlassian с доступом к нужным проектам Jira и пространствам Confluence.
-- Maven Wrapper включён в репозиторий; отдельно устанавливать Maven для сборки не требуется.
-
-Права учётной записи Atlassian должны разрешать операции, которые планируется выполнять: просмотр, поиск, создание и изменение задач или страниц.
-
-## Конфигурация
-
-Для подключения необходимы следующие параметры:
-
-| Переменная | Обязательна | Назначение |
-|---|---:|---|
-| `JIRA_URL` | Да | Базовый HTTPS URL Jira, например `https://company.atlassian.net` |
-| `JIRA_EMAIL` | Да | E-mail пользователя Atlassian |
-| `JIRA_TOKEN` | Да | API-токен Atlassian |
-| `CONFLUENCE_URL` | Нет | Базовый URL Confluence. По умолчанию используется `JIRA_URL/wiki` |
-| `MCP_MAX_TEXT_LENGTH` | Нет | Максимальная длина текстового поля в ответе MCP. По умолчанию 4000 символов |
-| `MCP_MAX_RESPONSE_BYTES` | Нет | Максимальный размер HTTP-ответа. По умолчанию 2097152 байта |
-| `ATLASSIAN_LOG_LEVEL` | Нет | Уровень логирования: `DEBUG`, `INFO`, `WARN` или `ERROR`. По умолчанию `INFO` |
+- JDK 17 или новее.
+- Учётная запись Atlassian с правами на нужные проекты Jira и пространства Confluence.
+- Для сборки используется Maven Wrapper из репозитория; отдельная установка Maven не требуется.
 
 Сервер использует HTTP Basic-аутентификацию с парой `JIRA_EMAIL:JIRA_TOKEN`. Для Atlassian Cloud создайте API-токен в [настройках безопасности Atlassian](https://id.atlassian.com/manage-profile/security/api-tokens). Bearer-аутентификация с Personal Access Token не реализована.
 
-Для локального запуска скопируйте шаблон конфигурации и заполните его:
+## Конфигурация
+
+Обязательные параметры:
+
+| Переменная | Назначение |
+|---|---|
+| `JIRA_URL` | Базовый HTTPS URL Jira, например `https://company.atlassian.net` |
+| `JIRA_EMAIL` | E-mail пользователя Atlassian |
+| `JIRA_TOKEN` | API-токен Atlassian |
+
+Дополнительные параметры:
+
+| Переменная | Назначение | По умолчанию |
+|---|---|---|
+| `CONFLUENCE_URL` | Базовый URL Confluence | `JIRA_URL/wiki` |
+| `MCP_MAX_TEXT_LENGTH` | Максимальная длина текстового поля в ответе MCP | `4000` символов |
+| `MCP_MAX_RESPONSE_BYTES` | Максимальный размер HTTP-ответа | `2097152` байта |
+| `ATLASSIAN_LOG_LEVEL` | Уровень логирования: `DEBUG`, `INFO`, `WARN`, `ERROR` | `INFO` |
+
+Параметры Jira обязательны и при использовании только инструментов Confluence. Для Jira Server/Data Center укажите отдельный `CONFLUENCE_URL`, если Confluence расположен не по адресу `JIRA_URL/wiki`.
+
+### Источники конфигурации
+
+Сервер загружает настройки в следующем порядке приоритета:
+
+1. Свойства JVM (`-D`).
+2. Переменные окружения процесса.
+3. Файл `.env`.
+4. Файл `application.properties`.
+
+Используется первое непустое значение. Поэтому при необходимости любой параметр можно переопределить через `-D` или ENV, не изменяя файлы конфигурации.
+
+В репозитории есть шаблон `.env.example`. Создайте на его основе локальный файл:
 
 ```bash
 cp .env.example .env
 ```
 
-Файл `.env` содержит секреты и исключён из Git. Не публикуйте его и не добавляйте токены в репозиторий.
+Заполните `JIRA_URL`, `JIRA_EMAIL` и `JIRA_TOKEN`. Файл `.env` читается самим приложением, поэтому для запуска из IntelliJ IDEA не требуется плагин загрузки dotenv. Файл содержит секреты: он исключён из Git. Не добавляйте его в репозиторий и не включайте токены в Docker-образ.
 
-Также поддерживается файл `application.properties`:
+Встроенный файл `atlassian-mcp-app/src/main/resources/application.properties` содержит ссылки на ENV-переменные и значения по умолчанию для лимитов. Его можно использовать как основу для внешнего файла:
 
 ```properties
-jira.url=https://company.atlassian.net
-jira.email=user@company.com
-jira.token=your-api-token
-# confluence.url=https://company.atlassian.net/wiki
+jira.url=${JIRA_URL}
+jira.email=${JIRA_EMAIL}
+jira.token=${JIRA_TOKEN}
+confluence.url=${CONFLUENCE_URL}
+mcp.max-text-length=${MCP_MAX_TEXT_LENGTH:4000}
+mcp.max-response-bytes=${MCP_MAX_RESPONSE_BYTES:2097152}
 ```
 
-Источники настроек применяются в таком порядке: свойства JVM, переменные окружения, файл `.env`, файл `application.properties`. Путь к файлу можно задать через `ATLASSIAN_ENV_FILE` или `ATLASSIAN_PROPERTIES_FILE` (либо соответствующие свойства JVM `atlassian.env.file` и `atlassian.properties.file`). Без явно заданного пути файлы ищутся в рабочем каталоге и рядом с JAR; для `application.properties` дополнительно проверяется classpath. Поэтому файл настроек можно разместить рядом с JAR-файлом, если рабочий каталог MCP-клиента неизвестен.
+Поддерживаются ссылки `${NAME}` и `${NAME:default}`. Значения ссылок ищутся в ENV и `.env`; значение после двоеточия используется, если переменная не задана. Не храните реальные токены в отслеживаемом Git файле `application.properties`.
 
-**Важно:** `JIRA_URL`, `JIRA_EMAIL` и `JIRA_TOKEN` обязательны даже при использовании только инструментов Confluence. Для Atlassian Server/Data Center укажите отдельный `CONFLUENCE_URL`, если адрес Confluence не соответствует `JIRA_URL/wiki`.
+По умолчанию `.env` и внешний `application.properties` ищутся в текущем рабочем каталоге и рядом с JAR; встроенный `application.properties` также загружается из classpath. Путь к файлам можно задать явно:
 
-## Сборка и запуск
+| Назначение | ENV | Свойство JVM |
+|---|---|---|
+| Путь к dotenv-файлу | `ATLASSIAN_ENV_FILE` | `-Datlassian.env.file=/path/to/.env` |
+| Путь к properties-файлу | `ATLASSIAN_PROPERTIES_FILE` | `-Datlassian.properties.file=/path/to/application.properties` |
 
-Из корня репозитория выполните:
+## Сборка и тестирование
+
+Все команды выполняются из корня репозитория.
+
+Собрать исполняемый JAR:
 
 ```bash
 ./mvnw clean package
 ```
 
-После сборки исполняемый файл будет находиться здесь:
+Запустить тесты:
 
+```bash
+./mvnw test
 ```
+
+Выполнить полный Maven lifecycle до фазы verify:
+
+```bash
+./mvnw clean verify
+```
+
+После успешной сборки JAR находится здесь:
+
+```text
 atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 ```
 
-Задайте параметры подключения и запустите сервер:
+## Запуск
+
+### IntelliJ IDEA
+
+Создайте конфигурацию запуска типа **Application**:
+
+- **Main class:** `ru.solomentsev.app.AtlassianMcpServer`.
+- **Use classpath of module:** `atlassian-mcp-app`.
+- **Working directory:** корень репозитория.
+
+Создайте `.env` в корне репозитория и заполните параметры подключения. Приложение прочитает его при запуске. Дополнительные параметры можно задать в **VM options**, например:
+
+```text
+-Dmcp.max-text-length=8000
+```
+
+### Из командной строки
+
+Если `.env` расположен в текущем каталоге или рядом с JAR, достаточно выполнить:
 
 ```bash
-export JIRA_URL="https://company.atlassian.net"
-export JIRA_EMAIL="user@company.com"
-export JIRA_TOKEN="your-api-token"
-
 java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 ```
 
-Сервер читает запросы из `stdin` и записывает ответы JSON-RPC в `stdout`. Логи выводятся только в `stderr`. Не направляйте в `stdout` посторонний текст — это нарушит обмен с MCP-клиентом.
+Либо передать переменные окружения средствами ОС или MCP-клиента. Пример переопределения настройки через JVM:
+
+```bash
+java -Dmcp.max-text-length=8000 -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
+```
+
+### STDIO
+
+Сервер читает входящие сообщения из `stdin` и записывает ответы JSON-RPC в `stdout`. Логи направляются в `stderr`. Не выводите в `stdout` отладочные сообщения или другой посторонний текст — это нарушит обмен с MCP-клиентом.
 
 ## Подключение MCP-клиента
 
-Добавьте сервер в MCP-конфигурацию клиента. Ниже общий пример STDIO-конфигурации; синтаксис и расположение файла настроек зависят от конкретного клиента:
+Добавьте сервер в конфигурацию MCP-клиента. Ниже общий пример STDIO-подключения через собранный JAR:
 
 ```json
 {
@@ -111,7 +170,7 @@ java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
       "command": "java",
       "args": [
         "-jar",
-        "/absolute/path/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"
+        "/absolute/path/to/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"
       ],
       "env": {
         "JIRA_URL": "https://company.atlassian.net",
@@ -123,29 +182,33 @@ java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 }
 ```
 
-Замените путь и значения параметров на свои. Вместо передачи секретов в конфигурации клиента можно указать путь к файлу настроек через `ATLASSIAN_ENV_FILE` или `ATLASSIAN_PROPERTIES_FILE`.
+Укажите абсолютный путь к JAR и свои параметры. Если MCP-клиент запускает процесс из корня репозитория, сервер также сможет найти расположенный там файл `.env`. Для другого рабочего каталога задайте `ATLASSIAN_ENV_FILE` с абсолютным путём к нему. Поддержка поля `env` и расположение MCP-конфигурации зависят от клиента.
 
 ## Docker
 
-Перед запуском создайте файл `.env` из шаблона и заполните обязательные параметры:
+Docker-образ собирается отдельно от секретов. Файл `.env` не копируется в образ: Docker Compose передаёт его контейнеру во время запуска через `env_file`.
+
+Создайте и заполните `.env`, затем соберите образ:
 
 ```bash
 cp .env.example .env
-```
-
-Сборка образа:
-
-```bash
+# Заполните .env
 docker compose build
 ```
 
-Запуск MCP-сервера:
+Для локального запуска STDIO-сервера:
 
 ```bash
 docker compose run --rm -i atlassian-mcp-server
 ```
 
-Docker Compose использует `.env` через `env_file`. Сервер работает по STDIO, поэтому контейнер должен запускаться в интерактивном режиме без псевдотерминала. Не используйте `docker compose up -d` или флаг Docker `-t`: MCP-клиент должен обмениваться данными с процессом через `stdin/stdout`.
+Для подключения MCP-клиента используйте запуск Docker Compose как STDIO-процесса. Пример команды:
+
+```text
+docker compose run --rm -i atlassian-mcp-server
+```
+
+Укажите её в настройках MCP-клиента с рабочим каталогом проекта (или с `-f /absolute/path/to/docker-compose.yml`). Не запускайте этот STDIO-сервис через `docker compose up -d` и не добавляйте флаг `-t`: MCP-клиенту нужен прямой обмен через stdin/stdout без псевдотерминала.
 
 ## Структура проекта
 
@@ -154,24 +217,8 @@ Docker Compose использует `.env` через `env_file`. Сервер �
 | Модуль | Назначение |
 |---|---|
 | `atlassian-core` | MCP-протокол, конфигурация, HTTP-клиент и общая инфраструктура |
-| `atlassian-jira` | Интеграция с Jira |
-| `atlassian-confluence` | Интеграция с Confluence |
-| `atlassian-mcp-app` | Точка входа и сборка приложения |
+| `atlassian-jira` | Инструменты и сервисы Jira |
+| `atlassian-confluence` | Инструменты и сервисы Confluence |
+| `atlassian-mcp-app` | Точка входа, регистрация инструментов и сборка приложения |
 
-Модули Jira и Confluence используют общее ядро и не зависят друг от друга.
-
-## Разработка
-
-Сборка проекта:
-
-```bash
-./mvnw clean package
-```
-
-Запуск тестов:
-
-```bash
-./mvnw test
-```
-
-Тесты находятся в `src/test` соответствующих Maven-модулей.
+Модули Jira и Confluence используют общее ядро и не зависят друг от друга. Тесты находятся в `src/test` соответствующих модулей.
