@@ -52,6 +52,22 @@ public class AppConfigTest {
     }
 
     @Test
+    public void insecureHttpUrlIsRejected() {
+        assertThrows(IllegalStateException.class,
+                () -> AppConfig.of("http://company.atlassian.net", null, EMAIL, TOKEN));
+    }
+
+    @Test
+    public void urlWithUserInfoQueryOrFragmentIsRejected() {
+        assertThrows(IllegalStateException.class,
+                () -> AppConfig.of("https://user:password@company.atlassian.net", null, EMAIL, TOKEN));
+        assertThrows(IllegalStateException.class,
+                () -> AppConfig.of("https://company.atlassian.net?token=value", null, EMAIL, TOKEN));
+        assertThrows(IllegalStateException.class,
+                () -> AppConfig.of("https://company.atlassian.net#fragment", null, EMAIL, TOKEN));
+    }
+
+    @Test
     public void authHeaderIsBuiltWithBase64EncodedCredentials() {
         AppConfig config = AppConfig.of(JIRA_URL, null, EMAIL, TOKEN);
 
