@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -72,6 +73,12 @@ public class JiraServiceTest {
         assertEquals("Task...", root.get("summary").asText());
         assertEquals("Desc...", root.get("description_snippet").asText());
         assertEquals("In P...", root.get("status").asText());
+    }
+
+    @Test
+    public void searchRejectsLimitOutsideSupportedRange() {
+        assertThrows(IllegalArgumentException.class, () -> service.search("project = PROJ", 0));
+        assertThrows(IllegalArgumentException.class, () -> service.search("project = PROJ", 101));
     }
 
     @Test
