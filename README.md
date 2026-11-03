@@ -284,7 +284,7 @@ docker compose build
 
 ```bash
 docker compose run --rm -i atlassian-mcp-server
-```bash
+```
 
 Команда запускает контейнер в интерактивном режиме без псевдотерминала. `stdin` остаётся открытым, `stdout` используется только для JSON-RPC, диагностические сообщения выводятся в `stderr`.
 
@@ -293,7 +293,7 @@ docker compose run --rm -i atlassian-mcp-server
 ```bash
 docker build -t atlassian-mcp-server .
 docker run -i --rm --env-file .env atlassian-mcp-server
-```bash
+```
 
 **Пример конфигурации для Claude Desktop (`claude_desktop_config.json`):**
 
