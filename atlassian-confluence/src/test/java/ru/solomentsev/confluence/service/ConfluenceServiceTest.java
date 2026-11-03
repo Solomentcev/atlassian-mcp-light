@@ -7,6 +7,7 @@ import ru.solomentsev.core.client.FakeHttpClient;
 import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -23,6 +24,14 @@ public class ConfluenceServiceTest {
     public void setUp() {
         client = new FakeHttpClient();
         service = new ConfluenceService(client, BASE_URL);
+    }
+
+    @Test
+    public void listSpacesAndSearchRejectLimitsOutsideSupportedRange() {
+        assertThrows(IllegalArgumentException.class, () -> service.listSpaces(0));
+        assertThrows(IllegalArgumentException.class, () -> service.listSpaces(101));
+        assertThrows(IllegalArgumentException.class, () -> service.search("space = 'TEST'", 0));
+        assertThrows(IllegalArgumentException.class, () -> service.search("space = 'TEST'", 101));
     }
 
     @Test
