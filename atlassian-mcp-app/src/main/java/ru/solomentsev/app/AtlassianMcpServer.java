@@ -1,5 +1,7 @@
 package ru.solomentsev.app;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
@@ -95,7 +97,7 @@ public class AtlassianMcpServer {
 
             JsonNode parsed;
             try {
-                parsed = mapper.readTree(line);
+                parsed = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(line);
             } catch (JsonProcessingException e) {
                 log.warn("Некорректный JSON в STDIO сообщении", e);
                 writer.println(mapper.writeValueAsString(errorResponse(-32700, "Parse error")));
