@@ -219,6 +219,61 @@ public class ConfigLoaderTest {
         assertNull(found);
     }
 
+
+    @Test
+    public void propertiesPlaceholdersResolveEnvironmentAndDefaults() throws IOException {
+        Path propertiesFile = writeFile("application.properties",
+                "jira.url=${JIRA_URL}\\n"
+                        + "jira.email=${JIRA_EMAIL}\\n"
+                        + "jira.token=${JIRA_TOKEN}\\n"
+                        + "mcp.max-text-length=${MCP_MAX_TEXT_LENGTH:2500}\\n"
+                        + "mcp.max-response-bytes=${MCP_MAX_RESPONSE_BYTES:8192}\\n");
+
+        AppConfig config = ConfigLoader.of(
+                env("JIRA_URL", JIRA_URL, "JIRA_EMAIL", EMAIL, "JIRA_TOKEN", TOKEN),
+                null, null, propertiesFile).load();
+
+        assertEquals(JIRA_URL, config.getJiraUrl());
+        assertEquals(EMAIL, config.getJiraEmail());
+        assertEquals(TOKEN, config.getJiraToken());
+        assertEquals(2500, config.getMaxTextLength());
+        assertEquals(8192, config.getMaxResponseBytes());
+    }
+
+    @Test
+    public void propertiesPlaceholdersResolveValuesFromDotEnv() throws IOException {
+        Path envFile = writeFile(".env",
+                "JIRA_URL=" + JIRA_URL + "\\n"
+                        + "JIRA_EMAIL=" + EMAIL + "\\n"
+                        + "JIRA_TOKEN=" + TOKEN + "\\n");
+        Path propertiesFile = writeFile("application.properties",
+                "jira.url=${JIRA_URL}\\n"
+                        + "jira.email=${JIRA_EMAIL}\\n"
+                        + "jira.token=${JIRA_TOKEN}\\n");
+
+        AppConfig config = ConfigLoader.of(env(), null, envFile, propertiesFile).load();
+
+        assertEquals(JIRA_URL, config.getJiraUrl());
+        assertEquals(EMAIL, config.getJiraEmail());
+        assertEquals(TOKEN, config.getJiraToken());
+    }
+
+    @Test
+    public void propertiesPlaceholdersUseDefaultWhenVariableIsMissing() throws IOException {
+        Path propertiesFile = writeFile("application.properties",
+                "jira.url=${JIRA_URL:https://company.atlassian.net}\\n"
+                        + "jira.email=${JIRA_EMAIL:user@example.com}\\n"
+                        + "jira.token=${JIRA_TOKEN:secret-token}\\n"
+                        + "mcp.max-text-length=${MCP_MAX_TEXT_LENGTH:3000}\\n");
+
+        AppConfig config = ConfigLoader.of(env(), null, null, propertiesFile).load();
+
+        assertEquals(JIRA_URL, config.getJiraUrl());
+        assertEquals(EMAIL, config.getJiraEmail());
+        assertEquals(TOKEN, config.getJiraToken());
+        assertEquals(3000, config.getMaxTextLength());
+    }
+
     private Map<String, String> env(String... pairs) {
         Map<String, String> values = new HashMap<>();
         for (int i = 0; i < pairs.length; i += 2) {
