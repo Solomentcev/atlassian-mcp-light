@@ -17,9 +17,11 @@ import java.util.Objects;
 /**
  * Обрабатывает JSON-RPC 2.0 запросы протокола MCP.
  *
- * <p>Поддерживает жизненный цикл MCP с методами initialize и
- * notifications/initialized, методы tools/list, tools/call и ping,
- * а также проверяет структуру запросов и аргументы инструментов.</p>
+ * <p>Поддерживает два поколения MCP: handshake-жизненный цикл до версии
+ * {@code 2025-11-25} и stateless-жизненный цикл {@code 2026-07-28}.
+ * В обоих режимах доступны tools/list и tools/call; старые клиенты используют
+ * initialize и notifications/initialized, современные передают версию и
+ * возможности клиента в каждом запросе.</p>
  */
 public class McpProtocol {
 
@@ -28,8 +30,31 @@ public class McpProtocol {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    /** Версия протокола. */
-    static final String PROTOCOL_VERSION = "2024-11-05";
+    /** Последняя поддерживаемая версия MCP с handshake. */
+    static final String PROTOCOL_VERSION = "2025-11-25";
+
+    /** Современная stateless-версия MCP. */
+    static final String MODERN_PROTOCOL_VERSION = "2026-07-28";
+
+    /** Поддерживаемые версии MCP с handshake. */
+    private static final List<String> LEGACY_PROTOCOL_VERSIONS =
+            List.of("2024-11-05", PROTOCOL_VERSION);
+
+    /** Ключ версии протокола в per-request metadata. */
+    private static final String META_PROTOCOL_VERSION =
+            "io.modelcontextprotocol/protocolVersion";
+
+    /** Ключ возможностей клиента в per-request metadata. */
+    private static final String META_CLIENT_CAPABILITIES =
+            "io.modelcontextprotocol/clientCapabilities";
+
+    /** Ключ сведений о клиенте в per-request metadata. */
+    private static final String META_CLIENT_INFO =
+            "io.modelcontextprotocol/clientInfo";
+
+    /** Ключ сведений о сервере в metadata ответа. */
+    private static final String META_SERVER_INFO =
+            "io.modelcontextprotocol/serverInfo";
 
     /** Имя сервера. */
     static final String SERVER_NAME = "atlassian-lite";
@@ -73,10 +98,14 @@ public class McpProtocol {
         }
 
         String method = methodNode.asText();
+        JsonNode metadata = params.get("_meta");
+        boolean modernRequest = "server/discover".equals(method)
+                || (metadata != null && metadata.isObject() && metadata.has(META_PROTOCOL_VERSION));
 
-        // Только отсутствие id означает уведомление. id:null не является уведомлением.
+        // Уведомления никогда не получают ответ. В stateless-режиме они также
+        // не меняют состояние процесса или последующих запросов.
         if (!request.has("id")) {
-            if ("notifications/initialized".equals(method)
+            if (!modernRequest && "notifications/initialized".equals(method)
                     && lifecycleState == LifecycleState.INITIALIZATION_PENDING) {
                 lifecycleState = LifecycleState.READY;
                 log.info("MCP-соединение перешло в рабочее состояние");
@@ -84,7 +113,15 @@ public class McpProtocol {
             log.debug("Уведомление получено: method={}", method);
             return null;
         }
+
         log.info("Запрос: method={}, id={}", method, id);
+        if (modernRequest) {
+            JsonNode metadataError = validateModernMetadata(id, params);
+            if (metadataError != null) {
+                return metadataError;
+            }
+            return handleModernRequest(id, method, params);
+        }
 
         switch (method) {
             case "initialize":
@@ -123,10 +160,12 @@ public class McpProtocol {
                     "Invalid params: initialize requires protocolVersion, capabilities and clientInfo");
         }
 
-        // Сервер поддерживает только PROTOCOL_VERSION: при несовпадении
-        // сообщает клиенту единственную поддерживаемую версию.
+        // Версии handshake выбираются явно; неизвестная версия получает
+        // встречное предложение последней поддерживаемой handshake-версии.
+        String selectedVersion = LEGACY_PROTOCOL_VERSIONS.contains(requestedVersion.asText())
+                ? requestedVersion.asText() : PROTOCOL_VERSION;
         ObjectNode result = mapper.createObjectNode();
-        result.put("protocolVersion", PROTOCOL_VERSION);
+        result.put("protocolVersion", selectedVersion);
         ObjectNode serverCapabilities = mapper.createObjectNode();
         serverCapabilities.set("tools", mapper.createObjectNode());
         result.set("capabilities", serverCapabilities);
@@ -136,6 +175,101 @@ public class McpProtocol {
         result.set("serverInfo", serverInfo);
         lifecycleState = LifecycleState.INITIALIZATION_PENDING;
         return successResponse(id, result);
+    }
+
+    /**
+     * Проверяет per-request metadata современного протокола.
+     *
+     * @param id идентификатор запроса
+     * @param params параметры запроса
+     * @return JSON-RPC ошибка или null, если metadata корректна
+     */
+    private JsonNode validateModernMetadata(JsonNode id, JsonNode params) {
+        JsonNode metadata = params.get("_meta");
+        if (metadata == null || !metadata.isObject()) {
+            return errorResponse(id, -32602, "Invalid params: modern MCP request requires _meta");
+        }
+
+        JsonNode version = metadata.get(META_PROTOCOL_VERSION);
+        JsonNode capabilities = metadata.get(META_CLIENT_CAPABILITIES);
+        if (version == null || !version.isTextual() || version.asText().isBlank()
+                || capabilities == null || !capabilities.isObject()) {
+            return errorResponse(id, -32602,
+                    "Invalid params: _meta requires protocolVersion and clientCapabilities");
+        }
+        if (!MODERN_PROTOCOL_VERSION.equals(version.asText())) {
+            ObjectNode data = mapper.createObjectNode();
+            ArrayNode supported = data.putArray("supportedVersions");
+            supported.add(MODERN_PROTOCOL_VERSION);
+            return errorResponse(id, -32022, "Unsupported protocol version", data);
+        }
+
+        JsonNode clientInfo = metadata.get(META_CLIENT_INFO);
+        if (clientInfo != null && !isValidImplementation(clientInfo)) {
+            return errorResponse(id, -32602, "Invalid params: clientInfo must include name and version");
+        }
+        return null;
+    }
+
+    /**
+     * Обрабатывает запросы stateless-версии MCP без использования состояния соединения.
+     *
+     * @param id идентификатор запроса
+     * @param method имя метода
+     * @param params параметры запроса
+     * @return JSON-RPC ответ
+     */
+    private JsonNode handleModernRequest(JsonNode id, String method, JsonNode params) {
+        try {
+            switch (method) {
+                case "server/discover":
+                    rejectUnknownFields(params, List.of("_meta"), "Параметры server/discover");
+                    return successResponse(id, discoverResult(), true);
+                case "tools/list":
+                    rejectUnknownFields(params, List.of("_meta"), "Параметры tools/list");
+                    return handleToolsList(id, true);
+                case "tools/call":
+                    return handleToolCall(id, params, true);
+                default:
+                    return errorResponse(id, -32601, "Неизвестный метод: " + method);
+            }
+        } catch (IllegalArgumentException e) {
+            return errorResponse(id, -32602, "Invalid params: " + safeMessage(e));
+        }
+    }
+
+    /**
+     * Формирует результат обнаружения сервера для современной версии MCP.
+     *
+     * @return описание поддерживаемых версий и возможностей сервера
+     */
+    private ObjectNode discoverResult() {
+        ObjectNode result = mapper.createObjectNode();
+        result.put("resultType", "complete");
+        ArrayNode versions = result.putArray("supportedVersions");
+        versions.add(MODERN_PROTOCOL_VERSION);
+        versions.add(PROTOCOL_VERSION);
+        versions.add("2024-11-05");
+
+        ObjectNode capabilities = result.putObject("capabilities");
+        capabilities.set("tools", mapper.createObjectNode());
+        result.set("_meta", serverInfoMetadata());
+        result.put("ttlMs", 300_000);
+        result.put("cacheScope", "public");
+        return result;
+    }
+
+    /**
+     * Создаёт metadata ответа с идентификатором сервера.
+     *
+     * @return объект metadata с serverInfo
+     */
+    private ObjectNode serverInfoMetadata() {
+        ObjectNode metadata = mapper.createObjectNode();
+        ObjectNode serverInfo = metadata.putObject(META_SERVER_INFO);
+        serverInfo.put("name", SERVER_NAME);
+        serverInfo.put("version", SERVER_VERSION);
+        return metadata;
     }
 
     private JsonNode serverNotInitialized(JsonNode id) {
@@ -153,6 +287,10 @@ public class McpProtocol {
     }
 
     private JsonNode handleToolsList(JsonNode id) {
+        return handleToolsList(id, false);
+    }
+
+    private JsonNode handleToolsList(JsonNode id, boolean modern) {
         ArrayNode toolsArray = mapper.createArrayNode();
         for (ToolDefinition tool : tools) {
             ObjectNode toolNode = mapper.createObjectNode();
@@ -167,12 +305,16 @@ public class McpProtocol {
 
         ObjectNode result = mapper.createObjectNode();
         result.set("tools", toolsArray);
-        return successResponse(id, result);
+        return successResponse(id, result, modern);
     }
 
     private JsonNode handleToolCall(JsonNode id, JsonNode params) {
+        return handleToolCall(id, params, false);
+    }
+
+    private JsonNode handleToolCall(JsonNode id, JsonNode params, boolean modern) {
         try {
-            rejectUnknownFields(params, List.of("name", "arguments"), "Параметры tools/call");
+            rejectUnknownFields(params, List.of("name", "arguments", "_meta"), "Параметры tools/call");
             JsonNode nameNode = params.get("name");
             if (nameNode == null || !nameNode.isTextual() || nameNode.asText().isBlank()) {
                 throw new IllegalArgumentException("Параметр 'name' должен быть непустой строкой");
@@ -192,7 +334,7 @@ public class McpProtocol {
             contentItem.put("text", output);
             content.add(contentItem);
             result.set("content", content);
-            return successResponse(id, result);
+            return successResponse(id, result, modern);
         } catch (Exception e) {
             log.error("Ошибка вызова инструмента", e);
             ObjectNode result = mapper.createObjectNode();
@@ -203,7 +345,7 @@ public class McpProtocol {
             content.add(contentItem);
             result.set("content", content);
             result.put("isError", true);
-            return successResponse(id, result);
+            return successResponse(id, result, modern);
         }
     }
 
@@ -309,20 +451,39 @@ public class McpProtocol {
     }
 
     private JsonNode successResponse(JsonNode id, JsonNode result) {
+        return successResponse(id, result, false);
+    }
+
+    private JsonNode successResponse(JsonNode id, JsonNode result, boolean modern) {
         ObjectNode response = mapper.createObjectNode();
         response.put("jsonrpc", "2.0");
         response.set("id", id);
-        response.set("result", result);
+        if (modern) {
+            ObjectNode modernResult = result instanceof ObjectNode
+                    ? (ObjectNode) result : mapper.createObjectNode();
+            modernResult.put("resultType", "complete");
+            modernResult.set("_meta", serverInfoMetadata());
+            response.set("result", modernResult);
+        } else {
+            response.set("result", result);
+        }
         return response;
     }
 
     private JsonNode errorResponse(JsonNode id, int code, String message) {
+        return errorResponse(id, code, message, null);
+    }
+
+    private JsonNode errorResponse(JsonNode id, int code, String message, JsonNode data) {
         ObjectNode response = mapper.createObjectNode();
         response.put("jsonrpc", "2.0");
         response.set("id", id);
         ObjectNode error = mapper.createObjectNode();
         error.put("code", code);
         error.put("message", message);
+        if (data != null) {
+            error.set("data", data);
+        }
         response.set("error", error);
         return response;
     }
