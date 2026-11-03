@@ -202,13 +202,28 @@ docker compose build
 docker compose run --rm -i atlassian-mcp-server
 ```
 
-Для подключения MCP-клиента используйте запуск Docker Compose как STDIO-процесса. Пример команды:
+Для подключения MCP-клиента укажите Docker Compose как STDIO-процесс. Пример общей конфигурации:
 
-```text
-docker compose run --rm -i atlassian-mcp-server
+```json
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f",
+        "/absolute/path/to/atlassian-mcp-server/docker-compose.yml",
+        "run",
+        "--rm",
+        "-i",
+        "atlassian-mcp-server"
+      ]
+    }
+  }
+}
 ```
 
-Укажите её в настройках MCP-клиента с рабочим каталогом проекта (или с `-f /absolute/path/to/docker-compose.yml`). Не запускайте этот STDIO-сервис через `docker compose up -d` и не добавляйте флаг `-t`: MCP-клиенту нужен прямой обмен через stdin/stdout без псевдотерминала.
+Замените путь на абсолютный путь к своему `docker-compose.yml`. Файл `.env` должен находиться рядом с ним: Compose передаст параметры контейнеру через `env_file`. Не запускайте этот STDIO-сервис через `docker compose up -d` и не добавляйте флаг `-t`: MCP-клиенту нужен прямой обмен через stdin/stdout без псевдотерминала.
 
 ## Структура проекта
 
