@@ -36,6 +36,16 @@ public class JiraServiceTest {
     }
 
     @Test
+    public void getIssueEncodesIssueKeyAsSinglePathSegment() throws IOException {
+        String url = BASE_URL + "/rest/api/2/issue/PROJ%2F1?fields=summary,description,status,issuetype";
+        client.onGet(url, issueResponse());
+
+        service.getIssue("PROJ/1");
+
+        assertEquals(url, client.getLastRequest().url());
+    }
+
+    @Test
     public void getIssueReturnsBriefInformation() throws IOException {
         client.onGet(BASE_URL + "/rest/api/2/issue/PROJ-1?fields=summary,description,status,issuetype",
                 issueResponse());
