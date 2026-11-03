@@ -8,6 +8,8 @@ import ru.solomentsev.core.client.FakeHttpClient;
 import ru.solomentsev.core.client.HttpClient;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -89,6 +91,42 @@ public class JiraServiceTest {
         assertTrue(body.contains("\"jql\":\"project = PROJ\""));
         assertTrue(body.contains("\"maxResults\":3"));
         assertTrue(body.contains("\"fields\":[\"summary\",\"status\"]"));
+    }
+
+    @Test
+    public void searchFollowsNextPageTokenUntilLimitIsReached() throws IOException {
+        List<String> requestBodies = new ArrayList<>();
+        HttpClient pagedClient = new HttpClient() {
+            @Override
+            public String get(String url) throws IOException {
+                throw new IOException("Unexpected GET request: " + url);
+            }
+
+            @Override
+            public String post(String url, String jsonBody) {
+                requestBodies.add(jsonBody);
+                if (requestBodies.size() == 1) {
+                    return "{\\"issues\\":[{\\"key\\":\\"PROJ-1\\",\\"fields\\":{\\"summary\\":\\"First\\"}}],"
+                            + "\\"nextPageToken\\":\\"cursor-2\\"}";
+                }
+                return "{\\"issues\\":[{\\"key\\":\\"PROJ-2\\",\\"fields\\":{\\"summary\\":\\"Second\\"}}]}";
+            }
+
+            @Override
+            public String put(String url, String jsonBody) throws IOException {
+                throw new IOException("Unexpected PUT request: " + url);
+            }
+        };
+        JiraService pagedService = new JiraService(pagedClient, BASE_URL);
+
+        JsonNode results = MAPPER.readTree(pagedService.search("project = PROJ", 2));
+
+        assertEquals(2, results.size());
+        assertEquals("PROJ-1", results.get(0).get("key").asText());
+        assertEquals("PROJ-2", results.get(1).get("key").asText());
+        assertEquals(2, requestBodies.size());
+        assertTrue(requestBodies.get(1).contains("\\"nextPageToken\\":\\"cursor-2\\""));
+        assertTrue(requestBodies.get(1).contains("\\"maxResults\\":1"));
     }
 
     @Test
