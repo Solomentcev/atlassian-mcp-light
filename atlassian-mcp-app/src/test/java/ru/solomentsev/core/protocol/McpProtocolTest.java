@@ -111,7 +111,7 @@ public class McpProtocolTest {
     public void toolsListIsRejectedBeforeInitialization() {
         JsonNode response = new McpProtocol().processRequest(request("tools/list"));
 
-        assertEquals(-32002, response.get("error").get("code").asInt());
+        assertEquals(-32001, response.get("error").get("code").asInt());
     }
 
     @Test
@@ -121,7 +121,7 @@ public class McpProtocolTest {
 
         JsonNode response = unreadyProtocol.processRequest(request("tools/list"));
 
-        assertEquals(-32002, response.get("error").get("code").asInt());
+        assertEquals(-32001, response.get("error").get("code").asInt());
     }
 
     @Test
@@ -151,7 +151,7 @@ public class McpProtocolTest {
 
         JsonNode response = newProtocol.processRequest(request("tools/list"));
 
-        assertEquals(-32002, response.get("error").get("code").asInt());
+        assertEquals(-32001, response.get("error").get("code").asInt());
     }
 
     @Test
