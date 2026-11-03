@@ -49,6 +49,8 @@ public class McpProtocolTest {
         McpToolInitializer.initialize(protocol, java.util.List.of(
                 new JiraToolProvider(jiraService),
                 new ConfluenceToolProvider(confluenceService)));
+        protocol.processRequest(initializeRequest("2024-11-05"));
+        protocol.processRequest(initializedNotification());
     }
 
     private ObjectNode request(String method) {
@@ -70,9 +72,16 @@ public class McpProtocolTest {
         return request;
     }
 
+    private ObjectNode initializedNotification() {
+        ObjectNode notification = MAPPER.createObjectNode();
+        notification.put("jsonrpc", "2.0");
+        notification.put("method", "notifications/initialized");
+        return notification;
+    }
+
     @Test
     public void initializeReturnsProtocolVersionAndServerInfo() throws IOException {
-        JsonNode response = protocol.processRequest(initializeRequest("2024-11-05"));
+        JsonNode response = new McpProtocol().processRequest(initializeRequest("2024-11-05"));
 
         JsonNode result = response.get("result");
         assertNotNull(result);
@@ -85,7 +94,7 @@ public class McpProtocolTest {
 
     @Test
     public void initializeRejectsMissingRequiredParameters() {
-        JsonNode response = protocol.processRequest(request("initialize"));
+        JsonNode response = new McpProtocol().processRequest(request("initialize"));
 
         assertNotNull(response.get("error"));
         assertEquals(-32602, response.get("error").get("code").asInt());
@@ -93,9 +102,66 @@ public class McpProtocolTest {
 
     @Test
     public void initializeReturnsSupportedVersionWhenClientRequestsAnotherVersion() {
-        JsonNode response = protocol.processRequest(initializeRequest("2025-03-26"));
+        JsonNode response = new McpProtocol().processRequest(initializeRequest("2025-03-26"));
 
         assertEquals("2024-11-05", response.get("result").get("protocolVersion").asText());
+    }
+
+    @Test
+    public void toolsListIsRejectedBeforeInitialization() {
+        JsonNode response = new McpProtocol().processRequest(request("tools/list"));
+
+        assertEquals(-32002, response.get("error").get("code").asInt());
+    }
+
+    @Test
+    public void toolsListIsRejectedUntilInitializedNotificationArrives() {
+        McpProtocol unreadyProtocol = new McpProtocol();
+        unreadyProtocol.processRequest(initializeRequest("2024-11-05"));
+
+        JsonNode response = unreadyProtocol.processRequest(request("tools/list"));
+
+        assertEquals(-32002, response.get("error").get("code").asInt());
+    }
+
+    @Test
+    public void pingIsAllowedBeforeInitialization() {
+        JsonNode response = new McpProtocol().processRequest(request("ping"));
+
+        assertNotNull(response.get("result"));
+        assertFalse(response.has("error"));
+    }
+
+    @Test
+    public void initializedNotificationEnablesNormalRequests() {
+        McpProtocol newProtocol = new McpProtocol();
+        newProtocol.processRequest(initializeRequest("2024-11-05"));
+        newProtocol.processRequest(initializedNotification());
+
+        JsonNode response = newProtocol.processRequest(request("tools/list"));
+
+        assertNotNull(response.get("result"));
+        assertFalse(response.has("error"));
+    }
+
+    @Test
+    public void initializedNotificationBeforeInitializeDoesNotEnableRequests() {
+        McpProtocol newProtocol = new McpProtocol();
+        newProtocol.processRequest(initializedNotification());
+
+        JsonNode response = newProtocol.processRequest(request("tools/list"));
+
+        assertEquals(-32002, response.get("error").get("code").asInt());
+    }
+
+    @Test
+    public void secondInitializeRequestIsRejected() {
+        McpProtocol newProtocol = new McpProtocol();
+        newProtocol.processRequest(initializeRequest("2024-11-05"));
+
+        JsonNode response = newProtocol.processRequest(initializeRequest("2024-11-05"));
+
+        assertEquals(-32600, response.get("error").get("code").asInt());
     }
 
     @Test
