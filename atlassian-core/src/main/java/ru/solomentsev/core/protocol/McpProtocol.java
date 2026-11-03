@@ -91,12 +91,12 @@ public class McpProtocol {
 
     private JsonNode handleInitialize(JsonNode id, JsonNode params) {
         JsonNode requestedVersion = params.get("protocolVersion");
-        JsonNode capabilities = params.get("capabilities");
+        JsonNode clientCapabilities = params.get("capabilities");
         JsonNode clientInfo = params.get("clientInfo");
 
         if (requestedVersion == null || !requestedVersion.isTextual()
                 || requestedVersion.asText().isBlank()
-                || capabilities == null || !capabilities.isObject()
+                || clientCapabilities == null || !clientCapabilities.isObject()
                 || !isValidImplementation(clientInfo)) {
             return errorResponse(id, -32602,
                     "Invalid params: initialize requires protocolVersion, capabilities and clientInfo");
@@ -106,9 +106,9 @@ public class McpProtocol {
         // сообщает клиенту единственную поддерживаемую версию.
         ObjectNode result = mapper.createObjectNode();
         result.put("protocolVersion", PROTOCOL_VERSION);
-        ObjectNode capabilities = mapper.createObjectNode();
-        capabilities.set("tools", mapper.createObjectNode());
-        result.set("capabilities", capabilities);
+        ObjectNode serverCapabilities = mapper.createObjectNode();
+        serverCapabilities.set("tools", mapper.createObjectNode());
+        result.set("capabilities", serverCapabilities);
         ObjectNode serverInfo = mapper.createObjectNode();
         serverInfo.put("name", SERVER_NAME);
         serverInfo.put("version", SERVER_VERSION);
