@@ -1,28 +1,36 @@
-# Git и локальные метаданные
+# Git metadata
 .git
 .gitignore
 
-# Локальная конфигурация и секреты
+# Local configuration and secrets
 .env
 .env.*
-!.env.example
 application.properties
 application-*.properties
+application.local.properties
+credentials.json
+secrets/
+**/secrets/
 **/*.pem
 **/*.key
 **/*.p12
 **/*.jks
-secrets/
-**/secrets/
 
-# Артефакты сборки и IDE
+# Build artifacts
 **/target/
-.classpath
-.project
-*.iml
+**/build/
+*.class
+*.jar
+
+# IDE files
 .idea/
 .vscode/
+*.iml
+.classpath
+.project
 
-# Логи и системные файлы
+# Logs and operating system files
+logs/
 *.log
+.cache/
 .DS_Store
