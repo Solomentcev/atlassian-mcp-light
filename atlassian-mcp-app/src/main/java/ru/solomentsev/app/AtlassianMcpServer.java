@@ -18,9 +18,13 @@ import ru.solomentsev.confluence.service.ConfluenceService;
 import ru.solomentsev.jira.service.JiraService;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Точка входа MCP-сервера для Jira и Confluence.
@@ -86,8 +90,23 @@ public class AtlassianMcpServer {
      * @throws IOException при ошибке чтения stdin
      */
     private static void handleStdioTransport(McpProtocol protocol) throws IOException {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-        PrintWriter writer = new PrintWriter(System.out, true);
+        handleStdioTransport(protocol, System.in, System.out);
+    }
+
+    /**
+     * Обрабатывает JSON-RPC сообщения через заданные UTF-8 потоки.
+     *
+     * @param protocol MCP-протокол
+     * @param input входной поток сообщений
+     * @param output выходной поток ответов
+     * @throws IOException если чтение или запись потока завершилась ошибкой
+     */
+    static void handleStdioTransport(McpProtocol protocol, InputStream input, OutputStream output)
+            throws IOException {
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(input, StandardCharsets.UTF_8));
+        BufferedWriter writer = new BufferedWriter(
+                new OutputStreamWriter(output, StandardCharsets.UTF_8));
 
         String line;
         while ((line = reader.readLine()) != null) {
@@ -99,21 +118,35 @@ public class AtlassianMcpServer {
             try {
                 parsed = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(line);
             } catch (JsonProcessingException e) {
-                log.warn("Некорректный JSON в STDIO сообщении", e);
-                writer.println(mapper.writeValueAsString(errorResponse(-32700, "Parse error")));
+                // Не записываем содержимое входной строки и детали парсера в логи.
+                log.warn("Некорректный JSON в STDIO сообщении");
+                writeResponse(writer, errorResponse(-32700, "Parse error"));
                 continue;
             }
 
             if (parsed == null || !parsed.isObject()) {
-                writer.println(mapper.writeValueAsString(errorResponse(-32600, "Invalid Request")));
+                writeResponse(writer, errorResponse(-32600, "Invalid Request"));
                 continue;
             }
 
             JsonNode response = protocol.processRequest((ObjectNode) parsed);
             if (response != null) {
-                writer.println(mapper.writeValueAsString(response));
+                writeResponse(writer, response);
             }
         }
+    }
+
+    /**
+     * Записывает один JSON-RPC ответ и немедленно сбрасывает буфер.
+     *
+     * @param writer выходной поток
+     * @param response JSON-RPC ответ
+     * @throws IOException если сериализация или запись завершилась ошибкой
+     */
+    private static void writeResponse(BufferedWriter writer, JsonNode response) throws IOException {
+        writer.write(mapper.writeValueAsString(response));
+        writer.write('\n');
+        writer.flush();
     }
 
     /**
