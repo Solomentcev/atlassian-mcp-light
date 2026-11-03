@@ -90,7 +90,7 @@ public class JiraService {
      * @throws IOException если запрос не удался
      */
     public String getIssue(String issueKey) throws IOException {
-        String url = baseUrl + REST_API + "/issue/" + issueKey
+        String url = baseUrl + REST_API + "/issue/" + encodePathSegment(issueKey)
                 + "?fields=summary,description,status,issuetype";
         JsonNode json = parseResponse(client.get(url));
 
@@ -296,7 +296,7 @@ public class JiraService {
      * @throws IOException если запрос не удался
      */
     public String getProject(String projectKey) throws IOException {
-        String url = baseUrl + REST_API + "/project/" + projectKey;
+        String url = baseUrl + REST_API + "/project/" + encodePathSegment(projectKey);
         JsonNode json = parseResponse(client.get(url));
         String key = json.has("key") ? json.get("key").asText() : projectKey;
         String name = json.has("name") ? truncate(json.get("name").asText()) : "";
@@ -368,12 +368,24 @@ public class JiraService {
         return trimmed.replaceAll("/+$", "");
     }
 
-    private String encodeUrl(String value) {
-        try {
-            return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            return value;
-        }
+    /**
+     * Кодирует значение для безопасного использования в query-параметре URL.
+     *
+     * @param value исходное значение
+     * @return URL-кодированное значение
+     */
+    private static String encodeUrl(String value) {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Кодирует значение как отдельный сегмент пути URL.
+     *
+     * @param value исходное значение
+     * @return URL-кодированный сегмент пути
+     */
+    private static String encodePathSegment(String value) {
+        return encodeUrl(value).replace("+", "%20");
     }
 
     /**
@@ -391,17 +403,6 @@ public class JiraService {
     }
 
     /**
-     * Добавляет ограничивающее условие к JQL-запросу, если в нём нет условий фильтрации.
-     *
-     * <p>Эндпоинт {@code /rest/api/3/search/jql} отклоняет неограниченные запросы
-     * (например, {@code ORDER BY created DESC} без условий) с HTTP 400. В этом случае
-     * добавляется ограничение по дате за последние 30 дней — поле ограничения
-     * выбирается по полю сортировки запроса.</p>
-     *
-     * @param jql исходный JQL-запрос
-     * @return JQL-запрос с ограничением
-     */
-    /**
      * Проверяет допустимый размер страницы поиска Jira.
      *
      * @param limit количество результатов
@@ -413,6 +414,17 @@ public class JiraService {
         }
     }
 
+    /**
+     * Добавляет ограничивающее условие к JQL-запросу, если в нём нет условий фильтрации.
+     *
+     * <p>Эндпоинт {@code /rest/api/3/search/jql} отклоняет неограниченные запросы
+     * (например, {@code ORDER BY created DESC} без условий) с HTTP 400. В этом случае
+     * добавляется ограничение по дате за последние 30 дней — поле ограничения
+     * выбирается по полю сортировки запроса.</p>
+     *
+     * @param jql исходный JQL-запрос
+     * @return JQL-запрос с ограничением
+     */
     private static String withSearchRestriction(String jql) {
         if (jql == null || jql.trim().isEmpty()) {
             return "created" + DEFAULT_SEARCH_RESTRICTION + " ORDER BY created DESC";
