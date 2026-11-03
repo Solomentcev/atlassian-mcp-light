@@ -182,6 +182,26 @@ public class ConfluenceServiceTest {
     }
 
     @Test
+    public void searchFollowsNextPageLinkUntilLimitIsReached() throws IOException {
+        String firstUrl = BASE_URL + "/rest/api/content?cql=space+%3D+%27TEST%27&limit=5";
+        String secondUrl = firstUrl + "&start=1";
+        client.onGet(firstUrl,
+                "{\\"results\\":[{\\"id\\":\\"123\\",\\"title\\":\\"First page\\","
+                        + "\\"space\\":{\\"key\\":\\"TEST\\"}}],"
+                        + "\\"_links\\":{\\"next\\":\\"/rest/api/content?start=1\\"}}");
+        client.onGet(secondUrl,
+                "{\\"results\\":[{\\"id\\":\\"456\\",\\"title\\":\\"Second page\\","
+                        + "\\"space\\":{\\"key\\":\\"TEST\\"}}]}");
+
+        String output = service.search("space = 'TEST'", 5);
+
+        assertTrue(output.contains("TEST:123 - First page"));
+        assertTrue(output.contains("TEST:456 - Second page"));
+        assertEquals(2, client.getRequests().size());
+        assertEquals(secondUrl, client.getLastRequest().url());
+    }
+
+    @Test
     public void trailingSlashInBaseUrlIsRemoved() throws IOException {
         FakeHttpClient localClient = new FakeHttpClient();
         localClient.onGet("https://company.atlassian.net/wiki/rest/api/space/TEST",
