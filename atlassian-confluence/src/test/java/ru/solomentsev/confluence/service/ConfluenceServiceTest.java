@@ -160,6 +160,23 @@ public class ConfluenceServiceTest {
     }
 
     @Test
+    public void listSpacesFollowsNextPageLinkWithoutExceedingLimit() throws IOException {
+        String firstUrl = BASE_URL + "/rest/api/space?limit=2";
+        String secondUrl = firstUrl + "&start=1";
+        client.onGet(firstUrl,
+                "{\"results\":[{\"key\":\"ONE\",\"name\":\"First space\"}],"
+                        + "\"_links\":{\"next\":\"/rest/api/space?start=1\"}}");
+        client.onGet(secondUrl,
+                "{\"results\":[{\"key\":\"TWO\",\"name\":\"Second space\"}]}");
+
+        String output = service.listSpaces(2);
+
+        assertTrue(output.contains("ONE: First space"));
+        assertTrue(output.contains("TWO: Second space"));
+        assertEquals(2, client.getRequests().size());
+    }
+
+    @Test
     public void searchEncodesCqlQueryInUrl() throws IOException {
         String url = BASE_URL + "/rest/api/content?cql=space+%3D+%27TEST%27&limit=5";
         client.onGet(url, "{\"results\":[]}");
