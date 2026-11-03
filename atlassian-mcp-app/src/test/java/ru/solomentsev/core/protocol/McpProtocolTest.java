@@ -8,7 +8,9 @@ import org.junit.Test;
 import ru.solomentsev.core.client.FakeHttpClient;
 import ru.solomentsev.app.McpToolInitializer;
 import ru.solomentsev.confluence.service.ConfluenceService;
+import ru.solomentsev.confluence.tools.ConfluenceToolProvider;
 import ru.solomentsev.jira.service.JiraService;
+import ru.solomentsev.jira.tools.JiraToolProvider;
 
 import java.io.IOException;
 
@@ -44,7 +46,9 @@ public class McpProtocolTest {
         ConfluenceService confluenceService =
                 new ConfluenceService(httpClient, "https://company.atlassian.net/wiki");
         protocol = new McpProtocol();
-        McpToolInitializer.initialize(protocol, jiraService, confluenceService);
+        McpToolInitializer.initialize(protocol, java.util.List.of(
+                new JiraToolProvider(jiraService),
+                new ConfluenceToolProvider(confluenceService)));
     }
 
     private ObjectNode request(String method) {
