@@ -3,6 +3,7 @@ package ru.solomentsev.core.protocol;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,12 +12,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Обработка JSON-RPC 2.0 протокола MCP.
+ * Обрабатывает JSON-RPC 2.0 запросы протокола MCP.
  *
- * <p>Отвечает за разбор запросов и формирование ответов:
- * initialize, tools/list, tools/call.</p>
+ * <p>Поддерживает методы initialize, tools/list, tools/call и ping,
+ * а также проверяет структуру запросов и аргументы инструментов.</p>
  */
 public class McpProtocol {
 
@@ -37,34 +39,37 @@ public class McpProtocol {
     private final List<ToolDefinition> tools = new ArrayList<>();
 
     /**
-     * Обрабатывает JSON-RPC запрос.
-     *
-     * <p>Возвращает {@code null}, если запрос является уведомлением: по JSON-RPC 2.0
-     * запрос без идентификатора {@code id} не требует ответа. Это критично для
-     * совместимости с MCP-клиентами, которые после {@code initialize} отправляют
-     * уведомление {@code notifications/initialized}.</p>
+     * Обрабатывает JSON-RPC запрос или уведомление.
      *
      * @param request объект запроса
-     * @return объект ответа или {@code null}, если запрос является уведомлением
-     * @throws IOException если обработка упала
+     * @return ответ JSON-RPC либо {@code null} для корректного уведомления
+     * @throws IOException если обработчик инструмента завершился ошибкой ввода-вывода
      */
     public JsonNode processRequest(ObjectNode request) throws IOException {
+        if (request == null) {
+            return errorResponse(NullNode.getInstance(), -32600, "Invalid Request");
+        }
+
+        JsonNode id = request.get("id");
+        JsonNode version = request.get("jsonrpc");
         JsonNode methodNode = request.get("method");
-        JsonNode id = request.has("id") ? request.get("id") : null;
         JsonNode params = request.has("params") ? request.get("params") : mapper.createObjectNode();
 
-        // JSON-RPC 2.0: уведомление (запрос без идентификатора) не требует ответа
-        if (id == null || id.isNull()) {
-            log.debug("Уведомление получено: method={}", methodNode != null ? methodNode.asText() : "null");
+        if (version == null || !version.isTextual() || !"2.0".equals(version.asText())
+                || methodNode == null || !methodNode.isTextual() || methodNode.asText().isBlank()
+                || params == null || !params.isObject()
+                || (request.has("id") && !isValidId(id))) {
+            return errorResponse(isValidId(id) ? id : NullNode.getInstance(),
+                    -32600, "Invalid Request");
+        }
+
+        // Только отсутствие id означает уведомление. id:null не является уведомлением.
+        if (!request.has("id")) {
+            log.debug("Уведомление получено: method={}", methodNode.asText());
             return null;
         }
 
-        if (methodNode == null || methodNode.isNull()) {
-            log.debug("Запрос без метода получен, возвращаю Invalid Request (-32600)");
-            return errorResponse(id, -32600, "Invalid Request: missing 'method'");
-        }
         String method = methodNode.asText();
-
         log.info("Запрос: method={}, id={}", method, id);
 
         switch (method) {
@@ -79,6 +84,10 @@ public class McpProtocol {
             default:
                 return errorResponse(id, -32601, "Неизвестный метод: " + method);
         }
+    }
+
+    private static boolean isValidId(JsonNode id) {
+        return id != null && (id.isTextual() || id.isNumber());
     }
 
     private JsonNode handleInitialize(JsonNode id) {
@@ -110,25 +119,16 @@ public class McpProtocol {
     }
 
     private JsonNode handleToolCall(JsonNode id, JsonNode params) {
-        JsonNode nameNode = params.get("name");
-        if (nameNode == null || nameNode.isNull()) {
-            log.error("Вызов инструмента без имени");
-            ObjectNode result = mapper.createObjectNode();
-            ArrayNode content = mapper.createArrayNode();
-            ObjectNode contentItem = mapper.createObjectNode();
-            contentItem.put("type", "text");
-            contentItem.put("text", "Ошибка: обязательный параметр 'name' не задан");
-            content.add(contentItem);
-            result.set("content", content);
-            result.put("isError", true);
-            return successResponse(id, result);
-        }
-        String toolName = nameNode.asText();
-        JsonNode arguments = params.has("arguments") ? params.get("arguments") : mapper.createObjectNode();
-
-        log.debug("Вызов инструмента: {} (аргументы: {})", toolName, argumentNames(arguments));
-
         try {
+            rejectUnknownFields(params, List.of("name", "arguments"), "Параметры tools/call");
+            JsonNode nameNode = params.get("name");
+            if (nameNode == null || !nameNode.isTextual() || nameNode.asText().isBlank()) {
+                throw new IllegalArgumentException("Параметр 'name' должен быть непустой строкой");
+            }
+
+            String toolName = nameNode.asText();
+            JsonNode arguments = params.has("arguments")
+                    ? params.get("arguments") : mapper.createObjectNode();
             String output = dispatch(toolName, arguments);
 
             ObjectNode result = mapper.createObjectNode();
@@ -140,12 +140,12 @@ public class McpProtocol {
             result.set("content", content);
             return successResponse(id, result);
         } catch (Exception e) {
-            log.error("Ошибка вызова инструмента: {}", toolName, e);
+            log.error("Ошибка вызова инструмента", e);
             ObjectNode result = mapper.createObjectNode();
             ArrayNode content = mapper.createArrayNode();
             ObjectNode contentItem = mapper.createObjectNode();
             contentItem.put("type", "text");
-            contentItem.put("text", "Ошибка: " + e.getMessage());
+            contentItem.put("text", "Ошибка: " + safeMessage(e));
             content.add(contentItem);
             result.set("content", content);
             result.put("isError", true);
@@ -156,29 +156,100 @@ public class McpProtocol {
     private String dispatch(String toolName, JsonNode arguments) throws IOException {
         for (ToolDefinition tool : tools) {
             if (tool.getName().equals(toolName)) {
+                validateArguments(tool, arguments);
                 return tool.getHandler().handle(arguments);
             }
         }
         throw new IllegalArgumentException("Неизвестный инструмент: " + toolName);
     }
 
+    private static void validateArguments(ToolDefinition tool, JsonNode arguments) {
+        if (arguments == null || !arguments.isObject()) {
+            throw new IllegalArgumentException("Аргументы инструмента должны быть JSON-объектом");
+        }
+
+        ObjectNode schema = tool.getInputSchema();
+        JsonNode properties = schema.path("properties");
+        JsonNode required = schema.path("required");
+
+        if (required.isArray()) {
+            for (JsonNode requiredName : required) {
+                String name = requiredName.asText();
+                if (!arguments.has(name) || arguments.get(name).isNull()) {
+                    throw new IllegalArgumentException("Обязательный параметр не задан: " + name);
+                }
+            }
+        }
+
+        Iterator<String> names = arguments.fieldNames();
+        while (names.hasNext()) {
+            String name = names.next();
+            JsonNode value = arguments.get(name);
+            JsonNode definition = properties.get(name);
+            if (definition == null) {
+                throw new IllegalArgumentException("Неизвестный параметр: " + name);
+            }
+            if (value == null || value.isNull()) {
+                throw new IllegalArgumentException("Параметр не может быть null: " + name);
+            }
+
+            String type = definition.path("type").asText();
+            if ("string".equals(type)) {
+                if (!value.isTextual() || value.asText().isBlank()) {
+                    throw new IllegalArgumentException(
+                            "Параметр '" + name + "' должен быть непустой строкой");
+                }
+            } else if ("integer".equals(type)) {
+                if (!value.isIntegralNumber() || !value.canConvertToInt()) {
+                    throw new IllegalArgumentException(
+                            "Параметр '" + name + "' должен быть целым числом");
+                }
+                int number = value.intValue();
+                JsonNode minimum = definition.get("minimum");
+                JsonNode maximum = definition.get("maximum");
+                if (minimum != null && number < minimum.intValue()) {
+                    throw new IllegalArgumentException("Параметр '" + name
+                            + "' должен быть не меньше " + minimum.intValue());
+                }
+                if (maximum != null && number > maximum.intValue()) {
+                    throw new IllegalArgumentException("Параметр '" + name
+                            + "' должен быть не больше " + maximum.intValue());
+                }
+            } else {
+                throw new IllegalStateException("Неизвестный тип в схеме инструмента: " + type);
+            }
+        }
+    }
+
+    private static void rejectUnknownFields(JsonNode object, List<String> allowed, String context) {
+        Iterator<String> names = object.fieldNames();
+        while (names.hasNext()) {
+            String name = names.next();
+            if (!allowed.contains(name)) {
+                throw new IllegalArgumentException(context + ": неизвестное поле '" + name + "'");
+            }
+        }
+    }
+
+    private static String safeMessage(Exception exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank()
+                ? exception.getClass().getSimpleName() : message;
+    }
+
     /**
-     * Возвращает имена аргументов вызова инструмента.
-     *
-     * <p>Значения аргументов не логируются: они могут содержать содержимое
-     * задач, комментарии и текст страниц.</p>
+     * Возвращает имена аргументов вызова инструмента без логирования значений.
      *
      * @param arguments аргументы вызова
-     * @return список имен аргументов
+     * @return список имён аргументов
      */
     private static List<String> argumentNames(JsonNode arguments) {
         List<String> names = new ArrayList<>();
-        if (arguments == null) {
-            return names;
-        }
-        Iterator<String> fields = arguments.fieldNames();
-        while (fields.hasNext()) {
-            names.add(fields.next());
+        if (arguments != null && arguments.isObject()) {
+            Iterator<String> fields = arguments.fieldNames();
+            while (fields.hasNext()) {
+                names.add(fields.next());
+            }
         }
         return names;
     }
@@ -205,14 +276,20 @@ public class McpProtocol {
     /**
      * Регистрирует инструмент.
      *
-     * @param tool инструмент
+     * @param tool описание и обработчик инструмента
+     * @throws NullPointerException если инструмент не задан
+     * @throws IllegalArgumentException если инструмент с таким именем уже зарегистрирован
      */
     public void addTool(ToolDefinition tool) {
+        Objects.requireNonNull(tool, "tool");
+        if (tools.stream().anyMatch(existing -> existing.getName().equals(tool.getName()))) {
+            throw new IllegalArgumentException("Инструмент уже зарегистрирован: " + tool.getName());
+        }
         tools.add(tool);
     }
 
     /**
-     * Определение инструмента.
+     * Неизменяемое описание зарегистрированного MCP-инструмента.
      */
     public static class ToolDefinition {
         private final String name;
@@ -220,20 +297,46 @@ public class McpProtocol {
         private final ObjectNode inputSchema;
         private final ToolHandler handler;
 
+        /**
+         * Создаёт описание инструмента.
+         *
+         * @param name имя инструмента
+         * @param description описание инструмента
+         * @param inputSchema JSON Schema аргументов
+         * @param handler обработчик вызова
+         */
         public ToolDefinition(String name, String description,
-                             ObjectNode inputSchema, ToolHandler handler) {
-            this.name = name;
-            this.description = description;
-            this.inputSchema = inputSchema;
-            this.handler = handler;
+                              ObjectNode inputSchema, ToolHandler handler) {
+            this.name = Objects.requireNonNull(name, "name");
+            this.description = Objects.requireNonNull(description, "description");
+            this.inputSchema = Objects.requireNonNull(inputSchema, "inputSchema").deepCopy();
+            this.handler = Objects.requireNonNull(handler, "handler");
+            if (name.isBlank()) {
+                throw new IllegalArgumentException("Имя инструмента не должно быть пустым");
+            }
         }
 
+        /** @return имя инструмента */
         public String getName() { return name; }
+
+        /** @return описание инструмента */
         public String getDescription() { return description; }
-        public ObjectNode getInputSchema() { return inputSchema; }
+
+        /** @return копия JSON Schema аргументов */
+        public ObjectNode getInputSchema() { return inputSchema.deepCopy(); }
+
+        /** @return обработчик вызова */
         public ToolHandler getHandler() { return handler; }
 
+        /** Обработчик вызова инструмента. */
         public interface ToolHandler {
+            /**
+             * Выполняет вызов инструмента.
+             *
+             * @param arguments проверенные аргументы
+             * @return текстовый результат
+             * @throws IOException если произошла ошибка ввода-вывода
+             */
             String handle(JsonNode arguments) throws IOException;
         }
     }
