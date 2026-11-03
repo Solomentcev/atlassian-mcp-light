@@ -136,6 +136,20 @@ public final class AppConfig {
      * @param url URL для нормализации (может быть null)
      * @return нормализованный URL или null, если вход был null
      */
+    /**
+     * Проверяет наличие обязательного строкового параметра.
+     *
+     * @param value значение параметра
+     * @param name название параметра для сообщения об ошибке
+     * @throws IllegalStateException если значение равно null или пустое
+     */
+    private static void validateRequired(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(
+                    "Обязательный параметр конфигурации не задан: " + name);
+        }
+    }
+
     private static String normalizeUrl(String url) {
         if (url == null) {
             return null;

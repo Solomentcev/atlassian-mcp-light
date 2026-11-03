@@ -113,12 +113,12 @@ final class JdkHttpClient implements HttpClient {
 
         // Читаем не более лимита + 1 байта: oversized body отклоняется до полной загрузки.
         try (InputStream bodyStream = response.body()) {
-            byte[] body = bodyStream.readNBytes(maxResponseBytes + 1);
-            if (body.length > maxResponseBytes) {
+            byte[] responseBody = bodyStream.readNBytes(maxResponseBytes + 1);
+            if (responseBody.length > maxResponseBytes) {
                 throw new IOException("HTTP response body exceeds configured limit of "
                         + maxResponseBytes + " bytes (" + method + " " + path + ")");
             }
-            return new String(body, StandardCharsets.UTF_8);
+            return new String(responseBody, StandardCharsets.UTF_8);
         }
     }
 
