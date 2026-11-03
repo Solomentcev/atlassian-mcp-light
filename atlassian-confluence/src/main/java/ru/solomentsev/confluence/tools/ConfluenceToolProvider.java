@@ -83,7 +83,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                 ToolSchema.create()
                         .requiredString("space_key", "Ключ пространства")
                         .requiredString("title", "Заголовок страницы")
-                        .requiredString("content", "HTML-содержимое страницы")
+                        .requiredString("content", "Содержимое страницы в формате Confluence Storage")
                         .optionalString("parent_id", "ID родительской страницы (опционально)")
                         .build(),
                 annotations(false, false, false),
@@ -98,7 +98,7 @@ public final class ConfluenceToolProvider implements ToolProvider {
                         .requiredString("page_id", "ID страницы Confluence")
                         .optionalInteger("version", "Текущая версия страницы. Если не указана, определяется автоматически", 1, null)
                         .optionalString("title", "Новый заголовок страницы (опционально)")
-                        .optionalString("content", "Новое HTML-содержимое страницы (опционально)")
+                        .optionalString("content", "Новое Содержимое страницы в формате Confluence Storage (опционально)")
                         .build(),
                 annotations(false, true, false),
                 args -> {
