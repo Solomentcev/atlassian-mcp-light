@@ -1,14 +1,28 @@
-# Исключаем лишние файлы из Docker образа
-*.md
-*.gradle
-*.source
+# Git и локальные метаданные
+.git
+.gitignore
 
-target
+# Локальная конфигурация и секреты
+.env
+.env.*
+!.env.example
+application.properties
+application-*.properties
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks
+secrets/
+**/secrets/
+
+# Артефакты сборки и IDE
+**/target/
 .classpath
 .project
-
 *.iml
+.idea/
+.vscode/
 
+# Логи и системные файлы
 *.log
 .DS_Store
-.env
