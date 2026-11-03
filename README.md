@@ -247,11 +247,11 @@ ATLASSIAN_LOG_LEVEL=DEBUG java -jar atlassian-mcp-app/target/atlassian-mcp-serve
 Пример вывода в `stderr`:
 
 ```
-12:47:21.264 DEBUG [main] ru.solomentsev.config.ConfigLoader - Параметр jira.url взят из файла .env
-12:47:21.370 INFO  [main] ru.solomentsev.protocol.McpProtocol - Запрос: method=tools/call, id=3
-12:47:21.377 DEBUG [main] ru.solomentsev.protocol.McpProtocol - Вызов инструмента: jira_search (аргументы: [jql, limit])
-12:47:21.378 DEBUG [main] ru.solomentsev.client.JdkHttpClient - HTTP-запрос: POST /rest/api/3/search/jql
-12:47:22.434 INFO  [main] ru.solomentsev.client.JdkHttpClient - HTTP-ответ: POST /rest/api/3/search/jql -> 200 (1055 мс)
+12:47:21.264 DEBUG [main] ru.solomentsev.core.config.ConfigLoader - Параметр jira.url взят из файла .env
+12:47:21.370 INFO  [main] ru.solomentsev.core.protocol.McpProtocol - Запрос: method=tools/call, id=3
+12:47:21.377 DEBUG [main] ru.solomentsev.core.protocol.McpProtocol - Вызов инструмента: jira_search (аргументы: [jql, limit])
+12:47:21.378 DEBUG [main] ru.solomentsev.core.client.JdkHttpClient - HTTP-запрос: POST /rest/api/3/search/jql
+12:47:22.434 INFO  [main] ru.solomentsev.core.client.JdkHttpClient - HTTP-ответ: POST /rest/api/3/search/jql -> 200 (1055 мс)
 ```
 
 **Что никогда не попадает в логи:** API-токен, заголовок `Authorization`, значения аргументов инструментов, тела запросов и query-строка URL (в лог пишется только путь). Имена аргументов логируются — значения нет.
