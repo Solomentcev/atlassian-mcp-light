@@ -1,4 +1,5 @@
 package ru.solomentsev.app;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
@@ -92,23 +93,43 @@ public class AtlassianMcpServer {
                 continue;
             }
 
+            JsonNode parsed;
             try {
-                ObjectNode jsonRequest = mapper.readValue(line, ObjectNode.class);
-                JsonNode response = protocol.processRequest(jsonRequest);
-                if (response != null) {
-                    writer.println(mapper.writeValueAsString(response));
-                }
-            } catch (Exception e) {
-                log.error("Ошибка обработки запроса", e);
-                ObjectNode errorResponse = mapper.createObjectNode();
-                errorResponse.put("jsonrpc", "2.0");
-                errorResponse.set("id", NullNode.getInstance());
-                ObjectNode error = mapper.createObjectNode();
-                error.put("code", -32700);
-                error.put("message", "Parse error");
-                errorResponse.set("error", error);
-                writer.println(mapper.writeValueAsString(errorResponse));
+                parsed = mapper.readTree(line);
+            } catch (JsonProcessingException e) {
+                log.warn("Некорректный JSON в STDIO сообщении", e);
+                writer.println(mapper.writeValueAsString(errorResponse(-32700, "Parse error")));
+                continue;
+            }
+
+            if (parsed == null || !parsed.isObject()) {
+                writer.println(mapper.writeValueAsString(errorResponse(-32600, "Invalid Request")));
+                continue;
+            }
+
+            JsonNode response = protocol.processRequest((ObjectNode) parsed);
+            if (response != null) {
+                writer.println(mapper.writeValueAsString(response));
             }
         }
     }
+
+    /**
+     * Формирует JSON-RPC ошибку транспорта.
+     *
+     * @param code код ошибки
+     * @param message описание ошибки
+     * @return JSON-RPC ответ с null в качестве идентификатора
+     */
+    private static ObjectNode errorResponse(int code, String message) {
+        ObjectNode response = mapper.createObjectNode();
+        response.put("jsonrpc", "2.0");
+        response.set("id", NullNode.getInstance());
+        ObjectNode error = mapper.createObjectNode();
+        error.put("code", code);
+        error.put("message", message);
+        response.set("error", error);
+        return response;
+    }
+
 }
