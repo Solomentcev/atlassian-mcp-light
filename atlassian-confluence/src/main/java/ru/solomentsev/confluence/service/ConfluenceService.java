@@ -187,10 +187,7 @@ public class ConfluenceService {
      */
     public String listSpaces(int limit) throws IOException {
         String url = baseUrl + "/rest/api/space?limit=" + limit;
-        JsonNode json = parseResponse(client.get(url));
-        ArrayNode spaces = json.has("results") && json.get("results").isArray()
-                ? (ArrayNode) json.get("results")
-                : mapper.createArrayNode();
+        ArrayNode spaces = fetchPaginatedResults(url, limit);
 
         StringBuilder result = new StringBuilder("Пространства Confluence (лимит: " + limit + "):\n");
         for (JsonNode space : spaces) {
@@ -213,10 +210,7 @@ public class ConfluenceService {
         String url = baseUrl + "/rest/api/content?cql="
                 + URLEncoder.encode(cql, StandardCharsets.UTF_8)
                 + "&limit=" + limit;
-        JsonNode json = parseResponse(client.get(url));
-        ArrayNode results = json.has("results") && json.get("results").isArray()
-                ? (ArrayNode) json.get("results")
-                : mapper.createArrayNode();
+        ArrayNode results = fetchPaginatedResults(url, limit);
 
         StringBuilder output = new StringBuilder(
                 "Результаты поиска CQL: " + truncate(cql) + " (лимит: " + limit + "):\n");
@@ -229,6 +223,49 @@ public class ConfluenceService {
                     .append(" - ").append(title).append("\n");
         }
         return output.toString();
+    }
+
+    /**
+     * Загружает результаты Confluence по страницам, не превышая заданный лимит.
+     *
+     * @param initialUrl URL первой страницы с параметром limit
+     * @param maximumResults максимальное количество результатов
+     * @return объединённые результаты всех полученных страниц
+     * @throws IOException если запрос или разбор ответа завершился ошибкой
+     */
+    private ArrayNode fetchPaginatedResults(String initialUrl, int maximumResults) throws IOException {
+        ArrayNode combined = mapper.createArrayNode();
+        int start = 0;
+        String url = initialUrl;
+
+        // Каждая следующая страница должна добавлять хотя бы один результат,
+        // поэтому число запросов не может превысить maximumResults.
+        while (combined.size() < maximumResults) {
+            JsonNode page = parseResponse(client.get(url));
+            JsonNode pageResults = page.path("results");
+            if (!pageResults.isArray() || pageResults.isEmpty()) {
+                break;
+            }
+
+            for (JsonNode result : pageResults) {
+                if (combined.size() >= maximumResults) {
+                    break;
+                }
+                combined.add(result);
+            }
+
+            start += pageResults.size();
+            JsonNode next = page.path("_links").path("next");
+            if (combined.size() >= maximumResults || next.isMissingNode()
+                    || !next.isTextual() || next.asText().isBlank()) {
+                break;
+            }
+
+            // Offset формируется локально: URL из ответа сервера не используется.
+            url = initialUrl + "&start=" + start;
+        }
+
+        return combined;
     }
 
     // ==================== Private helpers ====================
