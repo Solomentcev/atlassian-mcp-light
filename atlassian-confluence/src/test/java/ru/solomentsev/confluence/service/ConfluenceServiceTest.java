@@ -35,6 +35,18 @@ public class ConfluenceServiceTest {
     }
 
     @Test
+    public void getPageEncodesPageIdAsSinglePathSegment() throws IOException {
+        String url = BASE_URL + "/rest/api/content/12%2F3?expand=body.storage,version";
+        client.onGet(url,
+                "{\"id\":\"12/3\",\"title\":\"Page\","
+                        + "\"body\":{\"storage\":{\"value\":\"Body\"}}}");
+
+        service.getPage("12/3");
+
+        assertEquals(url, client.getLastRequest().url());
+    }
+
+    @Test
     public void getPageReturnsTitleAndContent() throws IOException {
         client.onGet(BASE_URL + "/rest/api/content/123?expand=body.storage,version",
                 "{\"id\":\"123\",\"title\":\"My page\","
