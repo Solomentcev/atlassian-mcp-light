@@ -23,8 +23,9 @@ RUN ./mvnw clean package -pl atlassian-mcp-app -am -DskipTests -B
 
 FROM eclipse-temurin:17-jre-alpine
 
-RUN apk add --no-cache dumb-init
-RUN addgroup -g 1000 -S appuser && adduser -u 1000 -S appuser -G appuser
+RUN apk add --no-cache dumb-init \
+    && addgroup -g 1000 -S appuser \
+    && adduser -u 1000 -S appuser -G appuser
 
 WORKDIR /app
 
@@ -33,10 +34,7 @@ COPY --from=builder /app/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPS
 RUN chown -R appuser:appuser /app
 USER appuser
 
-ENV JIRA_URL="" \
-    JIRA_EMAIL="" \
-    CONFLUENCE_URL="" \
-    ATLASSIAN_LOG_LEVEL="INFO"
+ENV ATLASSIAN_LOG_LEVEL="INFO"
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["java", "-jar", "app.jar"]
