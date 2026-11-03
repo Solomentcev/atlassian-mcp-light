@@ -1,24 +1,15 @@
-version: '3.8'
-
 services:
-  atlassian-mcp-server:
+  atlassian-mcp-light:
     build: .
-    image: atlassian-mcp-server:latest
-    container_name: atlassian-mcp-server
-    restart: unless-stopped
-    # MCP-сервер работает в интерактивном режиме (stdin/stdout)
-    # TTY и stdin_open необходимы для работы JSON-RPC транспорта
-    tty: true
+    image: atlassian-mcp-light:latest
+    # STDIO-транспорт использует stdin/stdout без псевдотерминала.
     stdin_open: true
-    # Загружаем переменные окружения из .env (секреты не попадают в репозиторий)
+    # Загружаем переменные окружения из .env (секреты не попадают в репозиторий).
     env_file:
       - .env
-    # Явно указываем переменные окружения (опционально, можно задать через .env)
     environment:
       - ATLASSIAN_LOG_LEVEL=${ATLASSIAN_LOG_LEVEL:-INFO}
-    # Логи в stdout/stderr (MCP-сервер использует stdout для JSON-RPC)
-    # Логирование идёт в stderr, stdout остаётся чистым для протокола
-    # Важно: не перенаправлять stdout в логи, иначе MCP-клиент не сможет разобрать ответы
+    # stdout зарезервирован для JSON-RPC, логи приложения направляются в stderr.
     logging:
       driver: "json-file"
       options:

@@ -1,14 +1,37 @@
-# Исключаем лишние файлы из Docker образа
-*.md
-*.gradle
-*.source
+# Git metadata
+.git
+.gitignore
 
-target
+# Local configuration and secrets
+.env
+.env.*
+application.properties
+!atlassian-mcp-app/src/main/resources/application.properties
+application-*.properties
+application.local.properties
+credentials.json
+secrets/
+**/secrets/
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks
+
+# Build artifacts
+**/target/
+**/build/
+*.class
+*.jar
+
+# IDE files
+.idea/
+.vscode/
+*.iml
 .classpath
 .project
 
-*.iml
-
+# Logs and operating system files
+logs/
 *.log
+.cache/
 .DS_Store
-.env
