@@ -7,25 +7,12 @@ import java.util.Base64;
 /**
  * Неизменяемая конфигурация приложения.
  *
- * <p>Единая точка доступа к настройкам MCP-сервера. Читает переменные окружения
- * при создании и обеспечивает валидацию обязательных параметров.</p>
- *
- * <p>Внедрение конфигурации через конструктор (Dependency Injection) позволяет
- * легко подменять значения в тестах или читать из .env файла в будущем.</p>
+ * <p>Единая неизменяемая модель настроек MCP-сервера. Загрузка значений из JVM
+ * properties, переменных окружения, файла {@code .env} и {@code application.properties}
+ * выполняется классом {@link ConfigLoader}; этот класс отвечает за валидацию
+ * и безопасное предоставление уже загруженных значений.</p>
  */
 public final class AppConfig {
-
-    /** Имя переменной окружения URL Jira. */
-    private static final String JIRA_URL_ENV = "JIRA_URL";
-
-    /** Имя переменной окружения Email для Basic-аутентификации. */
-    private static final String JIRA_EMAIL_ENV = "JIRA_EMAIL";
-
-    /** Имя переменной окружения API токена. */
-    private static final String JIRA_TOKEN_ENV = "JIRA_TOKEN";
-
-    /** Имя переменной окружения URL Confluence. */
-    private static final String CONFLUENCE_URL_ENV = "CONFLUENCE_URL";
 
     /** Лимит текста одного поля в ответе инструмента по умолчанию. */
     public static final int DEFAULT_MAX_TEXT_LENGTH = 4000;
@@ -89,28 +76,17 @@ public final class AppConfig {
     }
 
     /**
-     * Создает конфигурацию из переменных окружения системы.
+     * Создаёт конфигурацию из всех поддерживаемых источников.
      *
-     * <p>Учитывает только переменные окружения. Для полного набора источников
-     * (свойства JVM, .env, application.properties) используйте
-     * {@link ConfigLoader#fromSystem()}.</p>
+     * <p>Метод сохранён для совместимости. Приоритет источников и загрузку файлов
+     * централизованно выполняет {@link ConfigLoader}.</p>
      *
-     * @return новый экземпляр AppConfig
-     * @throws IllegalStateException если отсутствуют обязательные переменные
-     *                               (JIRA_URL, JIRA_EMAIL, JIRA_TOKEN)
+     * @return загруженная и проверенная конфигурация
+     * @throws IllegalStateException если обязательные параметры отсутствуют
+     *                               или содержат недопустимые значения
      */
     public static AppConfig fromEnvironment() {
-        String jiraUrl = System.getenv(JIRA_URL_ENV);
-        String jiraEmail = System.getenv(JIRA_EMAIL_ENV);
-        String jiraToken = System.getenv(JIRA_TOKEN_ENV);
-        String confluenceUrl = System.getenv(CONFLUENCE_URL_ENV);
-
-        validateRequired(jiraUrl, JIRA_URL_ENV);
-        validateRequired(jiraEmail, JIRA_EMAIL_ENV);
-        validateRequired(jiraToken, JIRA_TOKEN_ENV);
-
-        return new AppConfig(jiraUrl, confluenceUrl, jiraEmail, jiraToken,
-                DEFAULT_MAX_TEXT_LENGTH, DEFAULT_MAX_RESPONSE_BYTES);
+        return ConfigLoader.fromSystem().load();
     }
 
     /**
@@ -151,19 +127,6 @@ public final class AppConfig {
                 maxTextLength, maxResponseBytes);
     }
 
-    /**
-     * Валидирует, что значение не null и не пустое (после trim).
-     *
-     * @param value        проверяемое значение
-     * @param paramName    имя параметра для сообщения об ошибке
-     * @throws IllegalStateException если значение null или пустое
-     */
-    private static void validateRequired(String value, String paramName) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new IllegalStateException(
-                    "Обязательная переменная конфигурации не задана: " + paramName);
-        }
-    }
 
     /**
      * Нормализует URL: убирает пробелы по краям и trailing slash.
