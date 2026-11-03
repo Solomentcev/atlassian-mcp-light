@@ -43,9 +43,8 @@ public class McpProtocol {
      *
      * @param request объект запроса
      * @return ответ JSON-RPC либо {@code null} для корректного уведомления
-     * @throws IOException если обработчик инструмента завершился ошибкой ввода-вывода
      */
-    public JsonNode processRequest(ObjectNode request) throws IOException {
+    public JsonNode processRequest(ObjectNode request) {
         if (request == null) {
             return errorResponse(NullNode.getInstance(), -32600, "Invalid Request");
         }
@@ -74,7 +73,7 @@ public class McpProtocol {
 
         switch (method) {
             case "initialize":
-                return handleInitialize(id);
+                return handleInitialize(id, params);
             case "tools/list":
                 return handleToolsList(id);
             case "tools/call":
@@ -90,7 +89,21 @@ public class McpProtocol {
         return id != null && (id.isTextual() || id.isNumber());
     }
 
-    private JsonNode handleInitialize(JsonNode id) {
+    private JsonNode handleInitialize(JsonNode id, JsonNode params) {
+        JsonNode requestedVersion = params.get("protocolVersion");
+        JsonNode capabilities = params.get("capabilities");
+        JsonNode clientInfo = params.get("clientInfo");
+
+        if (requestedVersion == null || !requestedVersion.isTextual()
+                || requestedVersion.asText().isBlank()
+                || capabilities == null || !capabilities.isObject()
+                || !isValidImplementation(clientInfo)) {
+            return errorResponse(id, -32602,
+                    "Invalid params: initialize requires protocolVersion, capabilities and clientInfo");
+        }
+
+        // Сервер поддерживает только PROTOCOL_VERSION. При несовпадении
+        // сообщает клиенту единственную поддерживаемую версию.
         ObjectNode result = mapper.createObjectNode();
         result.put("protocolVersion", PROTOCOL_VERSION);
         ObjectNode capabilities = mapper.createObjectNode();
@@ -101,6 +114,16 @@ public class McpProtocol {
         serverInfo.put("version", SERVER_VERSION);
         result.set("serverInfo", serverInfo);
         return successResponse(id, result);
+    }
+
+    private static boolean isValidImplementation(JsonNode implementation) {
+        if (implementation == null || !implementation.isObject()) {
+            return false;
+        }
+        JsonNode name = implementation.get("name");
+        JsonNode version = implementation.get("version");
+        return name != null && name.isTextual() && !name.asText().isBlank()
+                && version != null && version.isTextual() && !version.asText().isBlank();
     }
 
     private JsonNode handleToolsList(JsonNode id) {
