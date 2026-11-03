@@ -125,6 +125,7 @@ public class JiraService {
      * @throws IOException если запрос не удался
      */
     public String search(String jql, int limit) throws IOException {
+        validateSearchLimit(limit);
         String url = baseUrl + SEARCH_API;
         ArrayNode results = mapper.createArrayNode();
         Set<String> requestedPageTokens = new HashSet<>();
@@ -133,7 +134,7 @@ public class JiraService {
         while (results.size() < limit) {
             ObjectNode payload = mapper.createObjectNode();
             payload.put("jql", withSearchRestriction(jql));
-            payload.put("maxResults", limit);
+            payload.put("maxResults", limit - results.size());
             ArrayNode fields = mapper.createArrayNode();
             fields.add("summary");
             fields.add("status");
@@ -399,6 +400,18 @@ public class JiraService {
      * @param jql исходный JQL-запрос
      * @return JQL-запрос с ограничением
      */
+    /**
+     * Проверяет допустимый размер страницы поиска Jira.
+     *
+     * @param limit количество результатов
+     * @throws IllegalArgumentException если значение не входит в диапазон 1..100
+     */
+    private static void validateSearchLimit(int limit) {
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("limit должен быть в диапазоне от 1 до 100");
+        }
+    }
+
     private static String withSearchRestriction(String jql) {
         if (jql == null || jql.trim().isEmpty()) {
             return "created" + DEFAULT_SEARCH_RESTRICTION + " ORDER BY created DESC";
