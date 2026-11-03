@@ -104,7 +104,7 @@ public class McpProtocolTest {
     public void initializeReturnsSupportedVersionWhenClientRequestsAnotherVersion() {
         JsonNode response = new McpProtocol().processRequest(initializeRequest("2025-03-26"));
 
-        assertEquals("2024-11-05", response.get("result").get("protocolVersion").asText());
+        assertEquals("2025-11-25", response.get("result").get("protocolVersion").asText());
     }
 
     @Test
@@ -437,6 +437,99 @@ public class McpProtocolTest {
         JsonNode response = protocol.processRequest(request);
 
         assertEquals(-32600, response.get("error").get("code").asInt());
+    }
+
+
+    @Test
+    public void initializeNegotiatesTheLatestHandshakeVersion() {
+        JsonNode response = new McpProtocol().processRequest(initializeRequest("2025-11-25"));
+
+        assertEquals("2025-11-25", response.get("result").get("protocolVersion").asText());
+    }
+
+    @Test
+    public void discoverAdvertisesModernAndLegacyProtocolVersions() {
+        JsonNode response = new McpProtocol().processRequest(modernRequest("server/discover"));
+        JsonNode result = response.get("result");
+
+        assertEquals("complete", result.get("resultType").asText());
+        assertTrue(result.get("supportedVersions").toString().contains("2026-07-28"));
+        assertTrue(result.get("supportedVersions").toString().contains("2025-11-25"));
+        assertNotNull(result.get("capabilities").get("tools"));
+        assertEquals("atlassian-lite",
+                result.get("_meta").get("io.modelcontextprotocol/serverInfo").get("name").asText());
+        assertEquals("public", result.get("cacheScope").asText());
+        assertTrue(result.get("ttlMs").asLong() > 0);
+    }
+
+    @Test
+    public void modernToolsListDoesNotRequireInitializeHandshake() {
+        McpProtocol statelessProtocol = new McpProtocol();
+
+        JsonNode response = statelessProtocol.processRequest(modernRequest("tools/list"));
+        JsonNode result = response.get("result");
+
+        assertNotNull(result);
+        assertEquals("complete", result.get("resultType").asText());
+        assertTrue(result.get("tools").isArray());
+        assertNotNull(result.get("_meta").get("io.modelcontextprotocol/serverInfo"));
+    }
+
+    @Test
+    public void modernToolCallDoesNotRequireInitializeHandshake() {
+        McpProtocol statelessProtocol = new McpProtocol();
+        ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        schema.put("additionalProperties", false);
+        schema.set("properties", MAPPER.createObjectNode());
+        statelessProtocol.addTool(new McpProtocol.ToolDefinition(
+                "echo", "Returns a fixed value", schema, arguments -> "ok"));
+
+        ObjectNode request = modernRequest("tools/call");
+        ObjectNode params = (ObjectNode) request.get("params");
+        params.put("name", "echo");
+        params.putObject("arguments");
+
+        JsonNode result = statelessProtocol.processRequest(request).get("result");
+
+        assertEquals("complete", result.get("resultType").asText());
+        assertFalse(result.get("isError").asBoolean());
+        assertEquals("ok", result.get("content").get(0).get("text").asText());
+    }
+
+    @Test
+    public void modernRequestRequiresClientCapabilitiesMetadata() {
+        ObjectNode request = modernRequest("tools/list");
+        ((ObjectNode) request.get("params").get("_meta"))
+                .remove("io.modelcontextprotocol/clientCapabilities");
+
+        JsonNode response = new McpProtocol().processRequest(request);
+
+        assertEquals(-32602, response.get("error").get("code").asInt());
+    }
+
+    @Test
+    public void modernRequestRejectsUnsupportedProtocolVersion() {
+        ObjectNode request = modernRequest("tools/list");
+        ((ObjectNode) request.get("params").get("_meta"))
+                .put("io.modelcontextprotocol/protocolVersion", "2099-01-01");
+
+        JsonNode response = new McpProtocol().processRequest(request);
+
+        assertEquals(-32022, response.get("error").get("code").asInt());
+        assertTrue(response.get("error").get("data").get("supportedVersions")
+                .toString().contains("2026-07-28"));
+    }
+
+    private ObjectNode modernRequest(String method) {
+        ObjectNode request = request(method);
+        ObjectNode metadata = request.putObject("params").putObject("_meta");
+        metadata.put("io.modelcontextprotocol/protocolVersion", "2026-07-28");
+        metadata.putObject("io.modelcontextprotocol/clientCapabilities");
+        ObjectNode clientInfo = metadata.putObject("io.modelcontextprotocol/clientInfo");
+        clientInfo.put("name", "test-client");
+        clientInfo.put("version", "1.0.0");
+        return request;
     }
 
 }
