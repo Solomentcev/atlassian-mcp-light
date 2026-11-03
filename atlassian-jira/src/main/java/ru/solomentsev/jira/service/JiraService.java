@@ -133,7 +133,7 @@ public class JiraService {
         while (results.size() < limit) {
             ObjectNode payload = mapper.createObjectNode();
             payload.put("jql", withSearchRestriction(jql));
-            payload.put("maxResults", limit - results.size());
+            payload.put("maxResults", limit);
             ArrayNode fields = mapper.createArrayNode();
             fields.add("summary");
             fields.add("status");
