@@ -80,6 +80,7 @@ public class McpProtocolTest {
             JsonNode inputSchema = tool.get("inputSchema");
             assertNotNull(inputSchema);
             assertEquals("object", inputSchema.get("type").asText());
+            assertFalse(inputSchema.get("additionalProperties").asBoolean());
             assertFalse(inputSchema.get("properties").isEmpty());
         }
     }
@@ -101,6 +102,8 @@ public class McpProtocolTest {
         JsonNode searchSchema = tools.get(1).get("inputSchema");
         assertEquals("string", searchSchema.get("properties").get("jql").get("type").asText());
         assertEquals("integer", searchSchema.get("properties").get("limit").get("type").asText());
+        assertEquals(1, searchSchema.get("properties").get("limit").get("minimum").asInt());
+        assertEquals(100, searchSchema.get("properties").get("limit").get("maximum").asInt());
         assertEquals(1, searchSchema.get("required").size());
         assertEquals("jql", searchSchema.get("required").get(0).asText());
     }
@@ -198,13 +201,16 @@ public class McpProtocolTest {
     }
 
     @Test
-    public void requestWithNullIdIsTreatedAsNotification() throws IOException {
+    public void requestWithNullIdReturnsInvalidRequestError() throws IOException {
         ObjectNode request = MAPPER.createObjectNode();
         request.put("jsonrpc", "2.0");
         request.putNull("id");
         request.put("method", "notifications/cancelled");
 
-        assertNull("Запрос с null id не должен порождать ответ", protocol.processRequest(request));
+        JsonNode response = protocol.processRequest(request);
+
+        assertNotNull(response);
+        assertEquals(-32600, response.get("error").get("code").asInt());
     }
 
     @Test
@@ -218,7 +224,7 @@ public class McpProtocolTest {
 
         assertNotNull(response);
         assertEquals(-32600, response.get("error").get("code").asInt());
-        assertTrue(response.get("error").get("message").asText().contains("method"));
+        assertEquals("Invalid Request", response.get("error").get("message").asText());
     }
 
     @Test
@@ -229,4 +235,92 @@ public class McpProtocolTest {
         assertEquals(0, response.get("result").size());
         assertEquals(1, response.get("id").asInt());
     }
+    @Test
+    public void nonStringToolArgumentIsRejected() throws IOException {
+        ObjectNode request = request("tools/call");
+        ObjectNode params = request.putObject("params");
+        params.put("name", "jira_get_issue");
+        params.putObject("arguments").put("issue_key", 123);
+
+        JsonNode result = protocol.processRequest(request).get("result");
+
+        assertTrue(result.get("isError").asBoolean());
+        assertTrue(result.get("content").get(0).get("text").asText().contains("непустой строкой"));
+    }
+
+    @Test
+    public void unknownToolArgumentIsRejected() throws IOException {
+        ObjectNode request = request("tools/call");
+        ObjectNode params = request.putObject("params");
+        params.put("name", "jira_get_issue");
+        ObjectNode arguments = params.putObject("arguments");
+        arguments.put("issue_key", "PROJ-1");
+        arguments.put("unexpected", "value");
+
+        JsonNode result = protocol.processRequest(request).get("result");
+
+        assertTrue(result.get("isError").asBoolean());
+        assertTrue(result.get("content").get(0).get("text").asText().contains("Неизвестный параметр"));
+    }
+
+    @Test
+    public void limitOutsideConfiguredRangeIsRejected() throws IOException {
+        ObjectNode request = request("tools/call");
+        ObjectNode params = request.putObject("params");
+        params.put("name", "jira_search");
+        ObjectNode arguments = params.putObject("arguments");
+        arguments.put("jql", "project = PROJ");
+        arguments.put("limit", 0);
+
+        JsonNode result = protocol.processRequest(request).get("result");
+
+        assertTrue(result.get("isError").asBoolean());
+        assertTrue(result.get("content").get(0).get("text").asText().contains("не меньше 1"));
+    }
+
+    @Test
+    public void fractionalLimitIsRejected() throws IOException {
+        ObjectNode request = request("tools/call");
+        ObjectNode params = request.putObject("params");
+        params.put("name", "jira_search");
+        ObjectNode arguments = params.putObject("arguments");
+        arguments.put("jql", "project = PROJ");
+        arguments.put("limit", 1.5);
+
+        JsonNode result = protocol.processRequest(request).get("result");
+
+        assertTrue(result.get("isError").asBoolean());
+        assertTrue(result.get("content").get(0).get("text").asText().contains("целым числом"));
+    }
+
+    @Test
+    public void invalidJsonRpcVersionReturnsInvalidRequest() throws IOException {
+        ObjectNode request = request("ping");
+        request.put("jsonrpc", "1.0");
+
+        JsonNode response = protocol.processRequest(request);
+
+        assertEquals(-32600, response.get("error").get("code").asInt());
+    }
+
+    @Test
+    public void nonObjectParamsReturnsInvalidRequest() throws IOException {
+        ObjectNode request = request("tools/call");
+        request.set("params", MAPPER.createArrayNode());
+
+        JsonNode response = protocol.processRequest(request);
+
+        assertEquals(-32600, response.get("error").get("code").asInt());
+    }
+
+    @Test
+    public void booleanIdReturnsInvalidRequest() throws IOException {
+        ObjectNode request = request("ping");
+        request.put("id", true);
+
+        JsonNode response = protocol.processRequest(request);
+
+        assertEquals(-32600, response.get("error").get("code").asInt());
+    }
+
 }
