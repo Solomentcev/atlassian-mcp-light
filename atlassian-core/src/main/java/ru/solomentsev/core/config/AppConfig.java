@@ -131,12 +131,6 @@ public final class AppConfig {
 
 
     /**
-     * Нормализует URL: убирает пробелы по краям и trailing slash.
-     *
-     * @param url URL для нормализации (может быть null)
-     * @return нормализованный URL или null, если вход был null
-     */
-    /**
      * Проверяет наличие обязательного строкового параметра.
      *
      * @param value значение параметра
@@ -150,6 +144,12 @@ public final class AppConfig {
         }
     }
 
+    /**
+     * Нормализует URL: убирает пробелы по краям и завершающие косые черты.
+     *
+     * @param url URL для нормализации (может быть null)
+     * @return нормализованный URL или null, если вход был null
+     */
     private static String normalizeUrl(String url) {
         if (url == null) {
             return null;
