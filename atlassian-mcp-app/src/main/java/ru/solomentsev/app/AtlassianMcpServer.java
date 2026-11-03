@@ -68,7 +68,7 @@ public class AtlassianMcpServer {
         McpProtocol protocol = new McpProtocol();
 
         // 5. Регистрация инструментов (OCP: расширение без изменения протокола)
-        ToolRegistrar.register(protocol, jiraService, confluenceService);
+        McpToolInitializer.initialize(protocol, jiraService, confluenceService);
 
         log.info("atlassian-mcp-server запущен: Jira={}, Confluence={}",
                 config.getJiraUrl(), config.resolveConfluenceUrl());
