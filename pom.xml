@@ -4,11 +4,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>ru.solomentsev</groupId>
-    <artifactId>atlassian-mcp-server</artifactId>
+    <artifactId>atlassian-mcp-light</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>atlassian-mcp-server</name>
+    <name>atlassian-mcp-light</name>
     <description>Многомодульный MCP-сервер для Jira и Confluence.</description>
 
     <modules>
