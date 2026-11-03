@@ -87,6 +87,25 @@ public class McpProtocolTest {
     }
 
     @Test
+    public void toolsListIncludesOperationAnnotations() throws IOException {
+        JsonNode tools = protocol.processRequest(request("tools/list")).get("result").get("tools");
+
+        JsonNode readAnnotations = tools.get(0).get("annotations");
+        assertTrue(readAnnotations.get("readOnlyHint").asBoolean());
+        assertFalse(readAnnotations.get("destructiveHint").asBoolean());
+        assertTrue(readAnnotations.get("idempotentHint").asBoolean());
+        assertTrue(readAnnotations.get("openWorldHint").asBoolean());
+
+        JsonNode commentAnnotations = tools.get(4).get("annotations");
+        assertFalse(commentAnnotations.get("readOnlyHint").asBoolean());
+        assertFalse(commentAnnotations.get("idempotentHint").asBoolean());
+
+        JsonNode updateAnnotations = tools.get(12).get("annotations");
+        assertTrue(updateAnnotations.get("destructiveHint").asBoolean());
+        assertTrue(updateAnnotations.get("openWorldHint").asBoolean());
+    }
+
+    @Test
     public void toolsListKeepsRequiredParameters() throws IOException {
         JsonNode tools = protocol.processRequest(request("tools/list")).get("result").get("tools");
 
