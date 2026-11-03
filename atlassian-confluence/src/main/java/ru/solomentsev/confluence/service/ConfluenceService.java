@@ -186,6 +186,7 @@ public class ConfluenceService {
      * @throws IOException если запрос не удался
      */
     public String listSpaces(int limit) throws IOException {
+        validateSearchLimit(limit);
         String url = baseUrl + "/rest/api/space?limit=" + limit;
         ArrayNode spaces = fetchPaginatedResults(url, limit);
 
@@ -207,6 +208,7 @@ public class ConfluenceService {
      * @throws IOException если запрос не удался
      */
     public String search(String cql, int limit) throws IOException {
+        validateSearchLimit(limit);
         String url = baseUrl + "/rest/api/content?cql="
                 + URLEncoder.encode(cql, StandardCharsets.UTF_8)
                 + "&limit=" + limit;
@@ -266,6 +268,18 @@ public class ConfluenceService {
         }
 
         return combined;
+    }
+
+    /**
+     * Проверяет допустимый размер страницы поиска Confluence.
+     *
+     * @param limit количество результатов
+     * @throws IllegalArgumentException если значение не входит в диапазон 1..100
+     */
+    private static void validateSearchLimit(int limit) {
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("limit должен быть в диапазоне от 1 до 100");
+        }
     }
 
     // ==================== Private helpers ====================
