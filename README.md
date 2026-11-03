@@ -1,4 +1,4 @@
-# Atlassian MCP Server
+# Atlassian MCP Light
 
 MCP-сервер на Java для работы AI-агентов с Jira и Confluence через REST API. Транспорт — STDIO, формат сообщений — JSON-RPC 2.0.
 
@@ -122,7 +122,7 @@ mcp.max-response-bytes=${MCP_MAX_RESPONSE_BYTES:2097152}
 После успешной сборки JAR находится здесь:
 
 ```text
-atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
+atlassian-mcp-app/target/atlassian-mcp-light-1.0-SNAPSHOT.jar
 ```
 
 ## Запуск
@@ -146,13 +146,13 @@ atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
 Если `.env` расположен в текущем каталоге или рядом с JAR, достаточно выполнить:
 
 ```bash
-java -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
+java -jar atlassian-mcp-app/target/atlassian-mcp-light-1.0-SNAPSHOT.jar
 ```
 
 Либо передать переменные окружения средствами ОС или MCP-клиента. Пример переопределения настройки через JVM:
 
 ```bash
-java -Dmcp.max-text-length=8000 -jar atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar
+java -Dmcp.max-text-length=8000 -jar atlassian-mcp-app/target/atlassian-mcp-light-1.0-SNAPSHOT.jar
 ```
 
 ### STDIO
@@ -166,11 +166,11 @@ java -Dmcp.max-text-length=8000 -jar atlassian-mcp-app/target/atlassian-mcp-serv
 ```json
 {
   "mcpServers": {
-    "atlassian": {
+    "atlassian-mcp-light": {
       "command": "java",
       "args": [
         "-jar",
-        "/absolute/path/to/atlassian-mcp-app/target/atlassian-mcp-server-1.0-SNAPSHOT.jar"
+        "/absolute/path/to/atlassian-mcp-app/target/atlassian-mcp-light-1.0-SNAPSHOT.jar"
       ],
       "env": {
         "JIRA_URL": "https://company.atlassian.net",
@@ -199,7 +199,7 @@ docker compose build
 Для локального запуска STDIO-сервера:
 
 ```bash
-docker compose run --rm -i atlassian-mcp-server
+docker compose run --rm -i atlassian-mcp-light
 ```
 
 Для подключения MCP-клиента укажите Docker Compose как STDIO-процесс. Пример общей конфигурации:
@@ -207,16 +207,16 @@ docker compose run --rm -i atlassian-mcp-server
 ```json
 {
   "mcpServers": {
-    "atlassian": {
+    "atlassian-mcp-light": {
       "command": "docker",
       "args": [
         "compose",
         "-f",
-        "/absolute/path/to/atlassian-mcp-server/docker-compose.yml",
+        "/absolute/path/to/atlassian-mcp-light/docker-compose.yml",
         "run",
         "--rm",
         "-i",
-        "atlassian-mcp-server"
+        "atlassian-mcp-light"
       ]
     }
   }
