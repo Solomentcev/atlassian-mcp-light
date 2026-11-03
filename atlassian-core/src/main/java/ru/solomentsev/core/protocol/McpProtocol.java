@@ -110,6 +110,9 @@ public class McpProtocol {
             toolNode.put("name", tool.getName());
             toolNode.put("description", tool.getDescription());
             toolNode.set("inputSchema", tool.getInputSchema());
+            if (!tool.getAnnotations().isEmpty()) {
+                toolNode.set("annotations", tool.getAnnotations());
+            }
             toolsArray.add(toolNode);
         }
 
@@ -297,10 +300,11 @@ public class McpProtocol {
         private final String name;
         private final String description;
         private final ObjectNode inputSchema;
+        private final ObjectNode annotations;
         private final ToolHandler handler;
 
         /**
-         * Создаёт описание инструмента.
+         * Создаёт описание инструмента без дополнительных аннотаций.
          *
          * @param name имя инструмента
          * @param description описание инструмента
@@ -309,9 +313,24 @@ public class McpProtocol {
          */
         public ToolDefinition(String name, String description,
                               ObjectNode inputSchema, ToolHandler handler) {
+            this(name, description, inputSchema, mapper.createObjectNode(), handler);
+        }
+
+        /**
+         * Создаёт описание инструмента с аннотациями MCP.
+         *
+         * @param name имя инструмента
+         * @param description описание инструмента
+         * @param inputSchema JSON Schema аргументов
+         * @param annotations подсказки о свойствах инструмента
+         * @param handler обработчик вызова
+         */
+        public ToolDefinition(String name, String description, ObjectNode inputSchema,
+                              ObjectNode annotations, ToolHandler handler) {
             this.name = Objects.requireNonNull(name, "name");
             this.description = Objects.requireNonNull(description, "description");
             this.inputSchema = Objects.requireNonNull(inputSchema, "inputSchema").deepCopy();
+            this.annotations = Objects.requireNonNull(annotations, "annotations").deepCopy();
             this.handler = Objects.requireNonNull(handler, "handler");
             if (name.isBlank()) {
                 throw new IllegalArgumentException("Имя инструмента не должно быть пустым");
@@ -326,6 +345,9 @@ public class McpProtocol {
 
         /** @return копия JSON Schema аргументов */
         public ObjectNode getInputSchema() { return inputSchema.deepCopy(); }
+
+        /** @return копия аннотаций MCP */
+        public ObjectNode getAnnotations() { return annotations.deepCopy(); }
 
         /** @return обработчик вызова */
         public ToolHandler getHandler() { return handler; }
