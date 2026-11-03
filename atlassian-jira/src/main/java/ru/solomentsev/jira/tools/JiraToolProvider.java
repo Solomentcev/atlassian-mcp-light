@@ -50,7 +50,7 @@ public final class JiraToolProvider implements ToolProvider {
                 "Поиск задач Jira по JQL запросу",
                 ToolSchema.create()
                         .requiredString("jql", "JQL запрос (например, project = PROJ AND status = 'Open')")
-                        .optionalInteger("limit", "Максимальное количество результатов (по умолчанию 5)")
+                        .optionalInteger("limit", "Максимальное количество результатов (по умолчанию 5)", 1, 100)
                         .build(),
                 args -> jiraService.search(required(args, "jql"),
                         args.has("limit") ? args.get("limit").asInt() : 5)));
